@@ -10,6 +10,8 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 26.13.1
@@ -23,4 +25,29 @@ jobs:
       - run: npm test
       - run: npm run build:bundle
       - run: npm run test:smoke
-      - run: node scripts/tauri.mjs build --no-bundle
+      - run: node scripts/tauri.mjs build --bundles nsis
+      - name: Stage Windows preview
+        shell: pwsh
+        run: |
+          $lvStage = Join-Path $env:RUNNER_TEMP 'lv999-ci'
+          New-Item -ItemType Directory -Force -Path "$lvStage/portable", "$lvStage/installer" | Out-Null
+          Copy-Item -LiteralPath 'apps/desktop/src-tauri/target/release/lv999-desktop.exe' -Destination "$lvStage/portable/lv999-desktop.exe"
+          Copy-Item -LiteralPath 'apps/desktop/src-tauri/runtime' -Destination "$lvStage/portable/runtime" -Recurse
+          Get-ChildItem -LiteralPath 'apps/desktop/src-tauri/target/release/bundle/nsis' -Filter '*.exe' | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination "$lvStage/installer"
+          }
+          $lvCommit = git rev-parse HEAD
+          @{ commit = $lvCommit; run_id = $env:GITHUB_RUN_ID; platform = 'windows-x64'; preview = $true } |
+            ConvertTo-Json | Set-Content -LiteralPath "$lvStage/build-info.json" -Encoding utf8NoBOM
+          $lvHashes = Get-ChildItem -LiteralPath $lvStage -Recurse -File | ForEach-Object {
+            $lvRelative = [IO.Path]::GetRelativePath($lvStage, $_.FullName).Replace('\', '/')
+            "$( (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $lvRelative"
+          }
+          $lvHashes | Set-Content -LiteralPath "$lvStage/SHA256SUMS.txt" -Encoding utf8NoBOM
+      - name: Upload Windows preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: LV999-windows-x64-${{ github.run_id }}
+          path: ${{ runner.temp }}/lv999-ci/
+          if-no-files-found: error
+          retention-days: 7
