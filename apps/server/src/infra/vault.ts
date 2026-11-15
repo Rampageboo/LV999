@@ -16,14 +16,14 @@ export class WindowsVault implements Vault {
     if (key.startsWith('oauth-client/')) return `com.rampageboo.lv999/oauth-client/${z.uuid().parse(key.slice(13)).toLowerCase()}`;
     return `com.rampageboo.lv999/notion/${z.uuid().parse(key).toLowerCase()}`;
   }
-  private invoke(input: object): Promise<{ok: boolean; secret?: string}> {
+  private invoke(input: object, timeoutMs = 10000): Promise<{ok: boolean; secret?: string}> {
     return new Promise((resolve, reject) => {
       if (process.platform !== 'win32') return reject(new Error('WINDOWS_VAULT_REQUIRED'));
       const exe = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
       const child = spawn(exe, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', this.script],
         { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env: { SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMP: process.env.TMP } });
       let output = '';
-      const timer = setTimeout(() => { child.kill(); reject(new Error('VAULT_TIMEOUT')); }, 10000);
+      const timer = setTimeout(() => { child.kill(); reject(new Error('VAULT_TIMEOUT')); }, timeoutMs);
       child.stdout.on('data', chunk => { output += chunk; if (output.length > 10000) child.kill(); });
       child.stderr.resume(); // Never include raw PowerShell errors or secrets in diagnostics.
       child.on('error', () => { clearTimeout(timer); reject(new Error('VAULT_UNAVAILABLE')); });
@@ -57,5 +57,6 @@ export class WindowsVault implements Vault {
       if (!response.ok) throw new Error('REMOVE_FAILED');
     } catch { throw new DomainError('VAULT_UNAVAILABLE', 'The credential could not be restored in Windows Credential Manager.'); }
   }
-  async probe() { try { return (await this.invoke({ operation: 'probe' })).ok; } catch { return false; } }
+  // First PowerShell/CLR startup on a clean Windows runner can exceed a credential operation's budget.
+  async probe() { try { return (await this.invoke({ operation: 'probe' }, 30000)).ok; } catch { return false; } }
 }

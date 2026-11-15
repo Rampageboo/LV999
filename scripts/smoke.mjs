@@ -22,7 +22,7 @@ try {
   management.stderr.on('data', chunk => { diagnostics += chunk; });
   const lines = createInterface({ input: management.stdout });
   management.stdin.write(JSON.stringify({ id: 1, method: 'snapshot' }) + '\n');
-  const [line] = await Promise.race([once(lines, 'line'), new Promise((_, reject) => setTimeout(() => reject(new Error('Management startup timed out')), 15000).unref())]);
+  const [line] = await Promise.race([once(lines, 'line'), new Promise((_, reject) => setTimeout(() => reject(new Error('Management startup timed out')), 35000).unref())]);
   const snapshot = JSON.parse(line).result;
   assert.equal(snapshot.backend.node, 'v26.13.1');
   assert.equal(resolve(snapshot.backend.executable), resolve(exe));
