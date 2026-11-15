@@ -37,7 +37,7 @@ jobs:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: LV999 ${{ github.ref_name }}
-          releaseBody: "Milestone 0 preview. Read-only bootstrap; real workspace acceptance and later milestones remain required."
+          releaseBody: "Engineering preview with read-only Notion access. Real workspace acceptance and remaining milestone work are still required."
           releaseDraft: true
           prerelease: true
           args: --bundles nsis --config src-tauri/tauri.release.conf.json

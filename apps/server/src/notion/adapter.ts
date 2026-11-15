@@ -28,6 +28,8 @@ export class OfficialNotionAdapter implements NotionAdapter {
 }
 export function safeError(error: unknown): DomainError {
   if (error instanceof DomainError) return error;
+  if (error instanceof Error && 'code' in error && String(error.code).startsWith('ERR_SQLITE'))
+    return new DomainError('LOCAL_SAVE_FAILED', 'The local connection registry is unavailable. Check disk access and refresh before retrying.');
   if (isNotionClientError(error)) {
     switch (error.code) {
       case 'unauthorized': return new DomainError('AUTH_REQUIRED', 'The connection token is missing, expired or revoked. Reauthorize this workspace.');

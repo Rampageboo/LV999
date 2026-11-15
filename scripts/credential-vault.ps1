@@ -16,6 +16,8 @@ public static class LV999Vault {
   public static extern bool Read(string target, uint type, uint flags, out IntPtr credential);
   [DllImport("advapi32.dll", EntryPoint="CredWriteW", CharSet=CharSet.Unicode, SetLastError=true)]
   public static extern bool Write(ref Credential credential, uint flags);
+  [DllImport("advapi32.dll", EntryPoint="CredDeleteW", CharSet=CharSet.Unicode, SetLastError=true)]
+  public static extern bool Delete(string target, uint type, uint flags);
   [DllImport("advapi32.dll")] public static extern void CredFree(IntPtr credential);
 }
 '@
@@ -51,7 +53,28 @@ try {
     @{ok=($found -or $vaultError -eq 1168)} | ConvertTo-Json -Compress
     exit 0
   }
-  if ($request.operation -ne 'read' -or $request.target -notmatch '^com\.rampageboo\.lv999/notion/[0-9a-f-]{36}$') { throw 'Invalid operation' }
+  if ($request.operation -notin @('read','write','remove') -or $request.target -notmatch '^com\.rampageboo\.lv999/notion/[0-9a-f-]{36}$') { throw 'Invalid operation' }
+  if ($request.operation -eq 'write') {
+    if ($request.secret -isnot [string] -or $request.secret.Length -lt 1 -or $request.secret.Length -gt 2048) { throw 'Invalid secret' }
+    $writeBlob = [Runtime.InteropServices.Marshal]::StringToCoTaskMemUni($request.secret)
+    try {
+      $credential = New-Object LV999Vault+Credential
+      $credential.Type = 1
+      $credential.TargetName = $request.target
+      $credential.CredentialBlobSize = $request.secret.Length * 2
+      $credential.CredentialBlob = $writeBlob
+      $credential.Persist = 2
+      $credential.UserName = 'LV999 test connection'
+      if (-not [LV999Vault]::Write([ref]$credential, 0)) { throw 'Vault write failed' }
+      @{ok=$true} | ConvertTo-Json -Compress
+    } finally { [Runtime.InteropServices.Marshal]::ZeroFreeCoTaskMemUnicode($writeBlob) }
+    exit 0
+  }
+  if ($request.operation -eq 'remove') {
+    if (-not [LV999Vault]::Delete($request.target, 1, 0) -and [Runtime.InteropServices.Marshal]::GetLastWin32Error() -ne 1168) { throw 'Vault delete failed' }
+    @{ok=$true} | ConvertTo-Json -Compress
+    exit 0
+  }
   $pointer = [IntPtr]::Zero
   if (-not [LV999Vault]::Read($request.target, 1, 0, [ref]$pointer)) {
     if ([Runtime.InteropServices.Marshal]::GetLastWin32Error() -ne 1168) { throw 'Vault unavailable' }

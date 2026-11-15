@@ -36,8 +36,10 @@ impl Backend {
         let request = serde_json::json!({"id": self.sequence, "method": method, "params": params});
         writeln!(self.input, "{request}").and_then(|_| self.input.flush())
             .map_err(|_| "Backend stopped. Restart LV999 to reconnect.".to_string())?;
-        let line = self.output.recv_timeout(Duration::from_secs(35))
-            .map_err(|_| "Backend did not respond within 35 seconds. Restart LV999 and check the connection.".to_string())?;
+        // Identity + read probe + vault round-trip + compensation each have bounded waits.
+        let timeout = if matches!(method, "connect_workspace" | "reauthorize_workspace") { 120 } else { 60 };
+        let line = self.output.recv_timeout(Duration::from_secs(timeout))
+            .map_err(|_| "Backend response timed out. The operation result is unknown; restart LV999 and refresh before retrying.".to_string())?;
         let response: serde_json::Value = serde_json::from_str(&line).map_err(|_| "Backend protocol error.")?;
         if response["id"].as_u64() != Some(self.sequence) { return Err("Backend response mismatch. Restart LV999.".into()); }
         response.get("result").cloned().ok_or("Backend rejected the management request.".into())
@@ -68,6 +70,22 @@ async fn verify_workspace(workspace_id: String, state: tauri::State<'_, SharedBa
     }).await.map_err(|_| "Backend worker failed.".to_string())?
 }
 
+#[tauri::command]
+async fn connect_workspace(input: serde_json::Value, state: tauri::State<'_, SharedBackend>) -> Result<serde_json::Value, String> {
+    let backend = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        backend.lock().map_err(|_| "Backend lock unavailable.")?.request("connect_workspace", input)
+    }).await.map_err(|_| "Backend worker failed.".to_string())?
+}
+
+#[tauri::command]
+async fn reauthorize_workspace(input: serde_json::Value, state: tauri::State<'_, SharedBackend>) -> Result<serde_json::Value, String> {
+    let backend = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        backend.lock().map_err(|_| "Backend lock unavailable.")?.request("reauthorize_workspace", input)
+    }).await.map_err(|_| "Backend worker failed.".to_string())?
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -79,7 +97,7 @@ fn main() {
             app.manage(Arc::new(Mutex::new(backend)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace])
+        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace])
         .build(tauri::generate_context!())
         .expect("LV999 desktop could not start")
         .run(|app, event| {

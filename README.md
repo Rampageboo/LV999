@@ -2,7 +2,7 @@
 
 Windows 上统一管理多个 Notion Workspace 的本地工具：一个 MCP 后端为 Claude Code 和 Codex 提供跨 Workspace 的读写与项目路由，一个 Tauri 桌面界面负责连接授权、项目映射、客户端配置、迁移预览与日志。
 
-> 状态：Milestone 0 只读工程预览。七页原生 GUI、共享后端与 Windows 安装/卸载已验证；真实双测试 Workspace 连通和独立无 Node 环境仍待验收，尚非完整 Milestone 0 通过。
+> 状态：Milestone 1 开发中。GUI 已支持测试 Workspace 连接、验证和重新授权；只读 Notion 访问、七页原生界面与共享后端已接通。真实双 Workspace、独立无 Node 环境仍待验收；尚未完成整个 Milestone 1。
 
 - 规格：[docs/spec.md](docs/spec.md)
 - 起步计划：[docs/plans/2026-11-16-bootstrap.md](docs/plans/2026-11-16-bootstrap.md)
@@ -10,6 +10,7 @@ Windows 上统一管理多个 Notion Workspace 的本地工具：一个 MCP 后�
 - API 支持矩阵：[docs/api-capabilities.md](docs/api-capabilities.md)
 - 安全边界：[docs/security.md](docs/security.md)
 - 验收记录：[docs/qa/2026-11-16-milestone-0.md](docs/qa/2026-11-16-milestone-0.md)
+- Workspace GUI 进度：[docs/qa/2026-11-16-milestone-1-workspaces.md](docs/qa/2026-11-16-milestone-1-workspaces.md)
 
 开发：`npm ci` → `npm run desktop`。构建：`npm run package:desktop`。前端单独运行时会明确显示后端不可用；实际功能通过 Tauri 原生 IPC 连接随包 Node。
 

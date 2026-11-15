@@ -4,7 +4,12 @@ import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { DomainError } from '../notion/adapter.js';
 
-export interface Vault { read(workspaceId: string): Promise<string | null>; probe(): Promise<boolean> }
+export interface Vault {
+  read(workspaceId: string): Promise<string | null>;
+  write(workspaceId: string, secret: string): Promise<void>;
+  remove(workspaceId: string): Promise<void>;
+  probe(): Promise<boolean>;
+}
 export class WindowsVault implements Vault {
   constructor(private script = join(dirname(fileURLToPath(import.meta.url)), 'credential-vault.ps1')) {}
   private invoke(input: object): Promise<{ok: boolean; secret?: string}> {
@@ -33,6 +38,20 @@ export class WindowsVault implements Vault {
       const response = await this.invoke({ operation: 'read', target: `com.rampageboo.lv999/notion/${id}` });
       return response.ok ? response.secret ?? null : null;
     } catch { throw new DomainError('VAULT_UNAVAILABLE', 'Windows Credential Manager could not be read. Check this Windows user session before reauthorizing.'); }
+  }
+  async write(workspaceId: string, secret: string) {
+    const id = z.uuid().parse(workspaceId).toLowerCase();
+    try {
+      const response = await this.invoke({ operation: 'write', target: `com.rampageboo.lv999/notion/${id}`, secret });
+      if (!response.ok) throw new Error('WRITE_FAILED');
+    } catch { throw new DomainError('VAULT_UNAVAILABLE', 'The credential could not be saved to Windows Credential Manager.'); }
+  }
+  async remove(workspaceId: string) {
+    const id = z.uuid().parse(workspaceId).toLowerCase();
+    try {
+      const response = await this.invoke({ operation: 'remove', target: `com.rampageboo.lv999/notion/${id}` });
+      if (!response.ok) throw new Error('REMOVE_FAILED');
+    } catch { throw new DomainError('VAULT_UNAVAILABLE', 'The credential could not be restored in Windows Credential Manager.'); }
   }
   async probe() { try { return (await this.invoke({ operation: 'probe' })).ok; } catch { return false; } }
 }

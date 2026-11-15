@@ -2,7 +2,7 @@
 
 Checked 2026-11-16 against the [official endpoint index](https://developers.notion.com/llms.txt) and installed `@notionhq/client` 5.31.1 types. Every adapter instance explicitly sends `Notion-Version: 2026-03-11`; the SDK default is not used. “Official” means a documented API, not that LV999 has implemented or live-tested it.
 
-| Official content API | LV999 Milestone 0 | Planned boundary |
+| Official content API | LV999 engineering preview | Planned boundary |
 |---|---|---|
 | [Token bot identity](https://developers.notion.com/reference/get-self) (`GET /v1/users/me`) | Implemented; ID/name must match registration before content access | Missing identity fails closed |
 | [Search](https://developers.notion.com/reference/post-search) (`POST /v1/search`) | Implemented; one exact workspace, cursor forwarding | Title search, not a complete workspace inventory |
@@ -29,6 +29,8 @@ The official Notion MCP has additional capabilities; those are not automatically
 
 `list_workspaces`, `verify_workspace`, `search_workspace`, `get_page`. All return the shared result envelope (`ok`, `code`, workspace/project/resource identity, changes, warnings/errors, job, dry-run and approval fields). No write tool or credential-management tool is registered. GUI uses private process pipes; MCP uses the v2 SDK's stdio transport. GUI, CLI and MCP call the same `Service` and `Store`.
 
+The private management pipe additionally accepts `connect_workspace` and `reauthorize_workspace`. These accept transient token input from the native GUI, verify the actual identity and a read-only search, then save/read back the token through Windows Credential Manager. They are not MCP tools and do not change Notion content. `verify_workspace` also checks read access; an identity-only success does not count as Connected. Search returns only a first-batch sample for this diagnostic and cannot establish a full workspace inventory.
+
 ## Failure attribution
 
 - `AUTH_REQUIRED`: no vault entry, or HTTP 401. Reauthorize this exact workspace.
@@ -36,6 +38,10 @@ The official Notion MCP has additional capabilities; those are not automatically
 - `NOT_FOUND_OR_NOT_SHARED`: HTTP 404. The API cannot distinguish a nonexistent object from one unavailable to this token. Never infer absence or try a different workspace's token.
 - `WORKSPACE_MISMATCH`: token identity differs from the selected ID. Content request is blocked.
 - `IDENTITY_UNAVAILABLE`: identity cannot be established. Content request is blocked.
+- `WORKSPACE_EXISTS`: use the existing row's Reauthorize action; the credential is not silently replaced.
+- `CONNECTION_BUSY`: another process holds this connection's short credential-save lease; wait and refresh.
+- `LOCAL_SAVE_FAILED` / `VAULT_UNAVAILABLE`: no success is claimed; completed credential changes are compensated and read back when saving fails.
+- `CREDENTIAL_STATE_UNCERTAIN`: compensation/readback could not confirm the prior credential. Existing positive verification is cleared; reconnect or reauthorize before use.
 - `RATE_LIMITED` / `NETWORK_ERROR`: no success is fabricated. M0 disables SDK retries so requests remain bounded; shared retry/rate-limit policy belongs to M2.
 
 See [official status codes](https://developers.notion.com/reference/status-codes) and [API versioning](https://developers.notion.com/reference/versioning). Contract tests inject fetch into the official SDK; they are not live Notion acceptance.

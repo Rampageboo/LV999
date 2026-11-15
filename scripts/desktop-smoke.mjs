@@ -45,7 +45,19 @@ try {
   await page.screenshot({ path: join(evidence, 'dashboard.png'), fullPage: true });
   await page.getByRole('button', { name: 'Set up connections', exact: true }).click();
   await page.getByRole('heading', { name: 'Workspaces', exact: true }).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Connect workspace', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Connect workspace', exact: true }).isEnabled(), true);
+  await page.getByRole('button', { name: 'Connect workspace', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Connect test workspace' }).waitFor();
+  assert.equal(await page.locator('input[name="connection_token"]').getAttribute('type'), 'password');
+  for (const key of ['Tab', 'Shift+Tab']) {
+    for (let tab = 0; tab < 6; tab++) {
+      await page.keyboard.press(key);
+      assert.equal(await page.getByRole('dialog').evaluate(element => element.contains(document.activeElement)), true, 'Focus escaped the connection dialog');
+    }
+  }
+  await page.screenshot({ path: join(evidence, 'connect-workspace-dialog.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  assert.equal(await page.getByRole('dialog').count(), 0);
   for (const name of ['Routing', 'Clients', 'Migration', 'Logs', 'Settings', 'Dashboard']) {
     await page.getByRole('navigation').getByRole('button', { name, exact: true }).click();
     await page.getByRole('heading', { name, exact: true, level: 1 }).waitFor();
@@ -63,7 +75,7 @@ try {
   await page.screenshot({ path: join(evidence, 'dashboard-narrow.png'), fullPage: true });
   await cdp.send('Emulation.clearDeviceMetricsOverride');
   assert.deepEqual(errors, [], 'Unexpected frontend console errors');
-  console.log('PASS: actual Tauri window, all seven pages, setup navigation, disabled actions, refresh, live backend/vault/WebView2, dark and narrow layout, clean console');
+  console.log('PASS: actual Tauri window, all seven pages, connection dialog/cancel, refresh, live backend/vault/WebView2, dark and narrow layout, clean console');
   // Kill only the backend whose PID was returned by this native app, to prove status does not stay green.
   process.kill(backendPid); backendPid = undefined;
   await page.getByRole('button', { name: 'Refresh status', exact: false }).click();

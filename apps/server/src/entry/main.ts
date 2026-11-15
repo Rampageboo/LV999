@@ -1,12 +1,11 @@
-import { createInterface } from 'node:readline';
 import { join } from 'node:path';
-import { z } from 'zod';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { WorkspaceInput, WorkspaceRef, result } from '../../../../packages/contracts/src/index.js';
 import { Service } from '../core/service.js';
 import { Store } from '../infra/store.js';
 import { WindowsVault } from '../infra/vault.js';
 import { createMcpServer } from '../mcp/server.js';
+import { runManagement } from '../management/protocol.js';
 
 const args = process.argv.slice(2);
 const mode = args.shift() ?? 'mcp';
@@ -15,21 +14,9 @@ const dataDir = flag('--data-dir') ?? join(process.env.LOCALAPPDATA ?? process.c
 const store = new Store(dataDir);
 const service = new Service(store, new WindowsVault());
 await service.initialize();
-const Request = z.object({ id: z.number().int(), method: z.enum(['snapshot', 'verify_workspace']), params: z.unknown().optional() }).strict();
 
 if (mode === 'management') {
-  const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
-  for await (const line of lines) {
-    let id: number | null = null;
-    try {
-      if (line.length > 8192) throw new Error('INVALID_INPUT');
-      const request = Request.parse(JSON.parse(line));
-      id = request.id;
-      const value = request.method === 'snapshot' ? service.snapshot() :
-        await service.verify(WorkspaceRef.parse(request.params).workspace_id);
-      process.stdout.write(JSON.stringify({ id, result: value }) + '\n');
-    } catch { process.stdout.write(JSON.stringify({ id, error: result(null, null, 'INVALID_INPUT', ['Invalid management request.']) }) + '\n'); }
-  }
+  await runManagement(service);
   store.close();
 } else if (mode === 'mcp') {
   const server = createMcpServer(service);

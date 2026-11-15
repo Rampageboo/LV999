@@ -10,9 +10,18 @@ export const WorkspaceInput = z.object({
 }).strict();
 export type WorkspaceConfig = z.infer<typeof WorkspaceInput>;
 export const WorkspaceRef = z.object({ workspace_id: z.uuid() }).strict();
+export const ConnectWorkspaceInput = z.object({
+  label: z.string().trim().max(80).default(''),
+  token: z.string().trim().min(1).max(2048),
+  environment: z.literal('test'),
+}).strict();
+export const ReauthorizeWorkspaceInput = ConnectWorkspaceInput.omit({ label: true }).extend({ workspace_id: z.uuid() });
+export type ConnectWorkspaceRequest = z.infer<typeof ConnectWorkspaceInput>;
+export type ReauthorizeWorkspaceRequest = z.infer<typeof ReauthorizeWorkspaceInput>;
 export type ErrorCode = 'OK' | 'AUTH_REQUIRED' | 'FORBIDDEN' | 'NOT_FOUND_OR_NOT_SHARED' |
   'WORKSPACE_MISMATCH' | 'TEST_WORKSPACE_ONLY' | 'UNKNOWN_WORKSPACE' | 'RATE_LIMITED' |
-  'NETWORK_ERROR' | 'VAULT_UNAVAILABLE' | 'IDENTITY_UNAVAILABLE' | 'INVALID_INPUT' | 'UNSUPPORTED' | 'INTERNAL_ERROR';
+  'NETWORK_ERROR' | 'VAULT_UNAVAILABLE' | 'IDENTITY_UNAVAILABLE' | 'INVALID_INPUT' | 'UNSUPPORTED' | 'INTERNAL_ERROR' |
+  'WORKSPACE_EXISTS' | 'CONNECTION_BUSY' | 'LOCAL_SAVE_FAILED' | 'CREDENTIAL_STATE_UNCERTAIN';
 export type Result<T> = {
   ok: boolean; code: ErrorCode; workspace_id: string | null; project_key: null;
   resource_url: string | null; changed_objects: number; warnings: string[];
@@ -28,6 +37,7 @@ export type WorkspaceView = WorkspaceConfig & {
   status: 'Configured' | 'Connected' | 'Auth required' | 'Degraded';
   verified_name: string | null; bot_id: string | null; checked_at: string | null;
   code: ErrorCode; message: string | null;
+  read_access: { checked_at: string; sampled_objects: number; has_more: boolean } | null;
 };
 export type Diagnostic = { key: string; label: string; status: 'pass' | 'pending' | 'error'; detail: string };
 export type Activity = { time: string; level: 'info' | 'error'; action: string; workspace_id: string | null; code: ErrorCode };
@@ -37,5 +47,5 @@ export type Snapshot = {
   diagnostics: Diagnostic[]; workspaces: WorkspaceView[]; activity: Activity[];
   projects: []; clients: { name: string; status: 'Not tested'; detail: string }[]; jobs: [];
   settings: { read_only: true; remote_enabled: false; autostart: false; api_version: string; data_dir: string; updater_configured: boolean };
-  capabilities: { connect_in_gui: false; routing: false; client_config: false; migration: false; content_write: false };
+  capabilities: { connect_in_gui: boolean; routing: false; client_config: false; migration: false; content_write: false };
 };

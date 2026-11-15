@@ -1,0 +1,33 @@
+import { createInterface } from 'node:readline';
+import { z } from 'zod';
+import { WorkspaceRef, result } from '../../../../packages/contracts/src/index.js';
+import type { Service } from '../core/service.js';
+
+const Request = z.object({
+  id: z.number().int(),
+  method: z.enum(['snapshot', 'verify_workspace', 'connect_workspace', 'reauthorize_workspace']),
+  params: z.unknown().optional(),
+}).strict();
+
+export async function runManagement(service: Service) {
+  const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+  for await (const line of lines) {
+    let id: number | null = null;
+    try {
+      if (line.length > 16384) throw new Error('INVALID_INPUT');
+      const request = Request.parse(JSON.parse(line));
+      id = request.id;
+      let value;
+      switch (request.method) {
+        case 'snapshot': value = service.snapshot(); break;
+        case 'verify_workspace': value = await service.verify(WorkspaceRef.parse(request.params).workspace_id); break;
+        case 'connect_workspace': value = await service.connectWorkspace(request.params); break;
+        case 'reauthorize_workspace': value = await service.reauthorizeWorkspace(request.params); break;
+      }
+      process.stdout.write(JSON.stringify({ id, result: value }) + '\n');
+    } catch {
+      // Validation errors can contain the rejected token: never stringify the exception or request.
+      process.stdout.write(JSON.stringify({ id, error: result(null, null, 'INVALID_INPUT', ['Invalid management request.']) }) + '\n');
+    }
+  }
+}
