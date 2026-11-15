@@ -24,7 +24,7 @@ function fixture() {
 }
 it('creates one Workspace group even without projects or messages', () => {
   const f = fixture(); const overview = f.hub.overview(f.human).data!;
-  expect(overview.workspaces).toHaveLength(2); expect(overview.projects).toEqual([]); expect(overview.auto_wake).toBe(false);
+  expect(overview.workspaces).toHaveLength(2); expect(overview.projects).toEqual([]); expect(overview.auto_wake).toBe(true);
   expect(f.hub.overview(f.human).data!.workspaces).toHaveLength(2);
 });
 it('ordinary text including @Codex never creates a wake or changes read receipts', () => {
@@ -33,11 +33,11 @@ it('ordinary text including @Codex never creates a wake or changes read receipts
   expect(f.hub.overview(f.claude).data!.total_unread).toBe(1);
   expect(f.hub.unread(f.claude).data!.messages).toHaveLength(1);
   expect(f.hub.overview(f.claude).data!.total_unread).toBe(1);
-  expect(f.store.db.prepare("SELECT name FROM sqlite_master WHERE name='wake_requests'").get()).toBeUndefined();
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM wake_requests').get()!.n).toBe(0);
 });
-it('structured wake requests are explicitly unsupported instead of falsely delivered', () => {
-  const f = fixture(); expect(f.send('Wake', f.human, { mentions: ['codex'] }).code).toBe('UNSUPPORTED');
-  expect(f.hub.overview(f.human).data!.workspaces[0].message_count).toBe(0);
+it('structured wake without a binding is persisted as blocked rather than falsely delivered', () => {
+  const f = fixture(); const message=f.send('Wake', f.human, { mentions: ['codex'] });
+  expect(message.ok).toBe(true);expect(message.data!.wakes[0]).toMatchObject({status:'BLOCKED',code:'SESSION_NOT_BOUND'});
 });
 it('human retrieval marks only the human recipient, never another agent', () => {
   const f = fixture(); const message = f.send('From Claude', f.claude).data!;

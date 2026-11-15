@@ -37,7 +37,7 @@ impl Backend {
         writeln!(self.input, "{request}").and_then(|_| self.input.flush())
             .map_err(|_| "Backend stopped. Restart LV999 to reconnect.".to_string())?;
         // Identity + read probe + vault round-trip + compensation each have bounded waits.
-        let timeout = if matches!(method, "connect_workspace" | "reauthorize_workspace" | "test_client") { 120 } else { 60 };
+        let timeout = if matches!(method, "connect_workspace" | "reauthorize_workspace" | "test_client" | "refresh_oauth" | "shutdown_agents") { 120 } else { 60 };
         let line = self.output.recv_timeout(Duration::from_secs(timeout))
             .map_err(|_| "Backend response timed out. The operation result is unknown; restart LV999 and refresh before retrying.".to_string())?;
         let response: serde_json::Value = serde_json::from_str(&line).map_err(|_| "Backend protocol error.")?;
@@ -99,13 +99,44 @@ async fn page_route_request(method: String, input: serde_json::Value, state: tau
 
 #[tauri::command]
 async fn client_chat_request(method: String, input: serde_json::Value, state: tauri::State<'_, SharedBackend>) -> Result<serde_json::Value, String> {
-    if !matches!(method.as_str(), "detect_clients" | "generate_client_config" | "test_client" | "chat_overview" | "read_chat" | "send_chat") {
+    if !matches!(method.as_str(), "detect_clients" | "generate_client_config" | "test_client" | "chat_overview" | "read_chat" | "send_chat" | "configure_agent" | "stop_agent" | "resume_agent" | "retry_wake") {
         return Err("Unsupported client/chat operation.".into());
     }
     let backend = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         backend.lock().map_err(|_| "Backend lock unavailable.")?.request(&method, input)
     }).await.map_err(|_| "Backend worker failed.".to_string())?
+}
+
+#[tauri::command]
+async fn oauth_request(method: String, input: serde_json::Value, state: tauri::State<'_, SharedBackend>) -> Result<serde_json::Value, String> {
+    if !matches!(method.as_str(), "oauth_status" | "configure_oauth" | "start_oauth" | "cancel_oauth" | "refresh_oauth") {
+        return Err("Unsupported OAuth operation.".into());
+    }
+    let backend = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        backend.lock().map_err(|_| "Backend lock unavailable.")?.request(&method, input)
+    }).await.map_err(|_| "Backend worker failed.".to_string())?
+}
+
+#[tauri::command]
+fn open_notion_authorization(url: String) -> Result<(), String> {
+    let parsed = tauri::Url::parse(&url).map_err(|_| "Invalid Notion authorization URL.")?;
+    let pairs: Vec<_> = parsed.query_pairs().collect();
+    let value = |key: &str| pairs.iter().find(|(name, _)| name.as_ref() == key).map(|(_, value)| value.as_ref());
+    if parsed.scheme() != "https" || parsed.host_str() != Some("api.notion.com") || parsed.port().is_some()
+        || parsed.path() != "/v1/oauth/authorize" || !parsed.username().is_empty() || parsed.password().is_some() || parsed.fragment().is_some()
+        || pairs.len() != 5 || value("response_type") != Some("code") || value("owner") != Some("user")
+        || value("redirect_uri") != Some("http://localhost:8765/oauth/notion/callback")
+        || !value("client_id").is_some_and(|v| v.len() == 36 && v.chars().all(|c| c.is_ascii_hexdigit() || c == '-'))
+        || !value("state").is_some_and(|v| v.len() == 43 && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')) {
+        return Err("Invalid Notion authorization URL.".into());
+    }
+    let system = std::env::var_os("SystemRoot").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("C:\\Windows"));
+    let mut command = Command::new(system.join("System32").join("rundll32.exe"));
+    command.args(["url.dll,FileProtocolHandler", &url]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)] { use std::os::windows::process::CommandExt; command.creation_flags(0x08000000); }
+    command.spawn().map(|_| ()).map_err(|_| "The browser could not be opened. Retry from LV999.".into())
 }
 
 fn main() {
@@ -119,7 +150,7 @@ fn main() {
             app.manage(Arc::new(Mutex::new(backend)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace, page_route_request, client_chat_request])
+        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace, page_route_request, client_chat_request, oauth_request, open_notion_authorization])
         .build(tauri::generate_context!())
         .expect("LV999 desktop could not start")
         .run(|app, event| {
@@ -127,6 +158,7 @@ fn main() {
                 // Wry can exit the process without running Rust destructors. Reap the owned child explicitly.
                 let state = app.state::<SharedBackend>();
                 if let Ok(mut backend) = state.lock() {
+                    let _ = backend.request("shutdown_agents", serde_json::Value::Null);
                     let _ = backend.child.kill();
                     let _ = backend.child.wait();
                 };

@@ -9,18 +9,26 @@ import { pageBatch, pageMetadata, pageReference } from '../notion/page-metadata.
 import type { Vault } from '../infra/vault.js';
 import { ClientManager } from '../management/clients.js';
 import { MessageHub } from '../messenger/hub.js';
+import { WakeEngine } from '../messenger/wake-engine.js';
+import type { AgentBridge } from '../messenger/native-bridge.js';
 import type { ChatIdentity } from '../../../../packages/contracts/src/index.js';
+import { NotionOAuth } from '../management/notion-oauth.js';
+import { decodeCredential, encodeCredential, type OAuthCredential, type OAuthEvidence, type OAuthExchange } from '../notion/oauth-credential.js';
 
 export class Service {
   readonly started = new Date().toISOString();
   private vaultReady = false;
   readonly clients: ClientManager;
   readonly messages: MessageHub;
+  readonly wake:WakeEngine;
+  readonly oauth: NotionOAuth;
   constructor(readonly store: Store, private vault: Vault,
-    private makeAdapter: (token: string) => NotionAdapter = token => new OfficialNotionAdapter(token),
-    local?: { clients?: ClientManager }) {
+    private makeAdapter: (token: string, oauth?: OAuthEvidence) => NotionAdapter = (token, oauth) => new OfficialNotionAdapter(token, undefined, oauth),
+    local?: { clients?: ClientManager; bridge?:AgentBridge; oauth?: OAuthExchange; oauthPort?: number; oauthTtlMs?: number }) {
     this.clients = local?.clients ?? new ClientManager(store.directory);
     this.messages = new MessageHub(store);
+    this.wake=new WakeEngine(this.messages,local?.bridge);
+    this.oauth = new NotionOAuth(store, vault, (credential, input) => this.connectOAuth(credential, input), local?.oauth, local?.oauthPort, local?.oauthTtlMs);
   }
   detectClients() { return this.clients.detect(); }
   generateClientConfig(input: unknown) { return this.clients.generate(input); }
@@ -28,6 +36,10 @@ export class Service {
   chatOverview() { return this.messages.overview({ actor: 'human', workspace_ids: 'owner' }); }
   readChat(input: unknown) { return this.messages.read({ actor: 'human', workspace_ids: 'owner' }, input); }
   sendChat(input: unknown) { return this.messages.send({ actor: 'human', workspace_ids: 'owner' }, input); }
+  configureAgent(input:unknown){return this.wake.configure(input);}
+  stopAgent(id:string){return this.wake.stop(id);}
+  resumeAgent(id:string,revision:number){return this.wake.resume(id,revision);}
+  retryWake(id:string,revision:number){return this.wake.retry(id,revision);}
   async initialize() {
     this.vaultReady = await this.vault.probe();
     this.store.log({ level: 'info', action: 'Backend started', workspace_id: null, code: 'OK' });
@@ -52,7 +64,8 @@ export class Service {
     return { checked_at: new Date().toISOString(), sampled_objects: response.data.results.length, has_more: response.data.has_more };
   }
   private proof(identity: Identity, access: WorkspaceView['read_access']): Partial<WorkspaceView> {
-    return { status: 'Connected', verified_name: identity.workspace_name, bot_id: identity.bot_id,
+    return { auth_kind: this.store.list().find(w => w.id === identity.workspace_id)?.auth_kind ?? 'internal',
+      status: 'Connected', verified_name: identity.workspace_name, bot_id: identity.bot_id,
       checked_at: new Date().toISOString(), code: 'OK', message: null, read_access: access };
   }
   private async verifiedAdapter(id: string) {
@@ -62,7 +75,10 @@ export class Service {
       throw new DomainError('TEST_WORKSPACE_ONLY', 'Only test workspaces are allowed during development.');
     const token = await this.vault.read(id);
     if (!token) throw new DomainError('AUTH_REQUIRED', 'No token is stored for this workspace in Windows Credential Manager.');
-    const adapter = this.makeAdapter(token);
+    const decoded = decodeCredential(token);
+    if (decoded.oauth && decoded.oauth.identity.workspace_id.toLowerCase() !== id.toLowerCase())
+      throw new DomainError('WORKSPACE_MISMATCH', 'The OAuth credential belongs to a different workspace. Reauthorize this workspace.');
+    const adapter = this.makeAdapter(decoded.token, decoded.oauth);
     return { adapter, identity: await this.identity(adapter, id) };
   }
   private failed<T>(id: string | null, action: string, error: unknown, updateStatus = true): Result<T> {
@@ -120,7 +136,7 @@ export class Service {
         throw new DomainError('WORKSPACE_EXISTS', 'This workspace is already connected. Use its Reauthorize action to replace the credential.');
       const access = await this.readAccess(adapter);
       const config = WorkspaceInput.parse({ id, label: label || identity.workspace_name.slice(0, 80), environment: 'test' });
-      await this.saveCredential(config, token, this.proof(identity, access), false);
+      await this.saveCredential(config, token, { ...this.proof(identity, access), auth_kind: 'internal' }, false);
       return this.connectionReply(id);
     } catch (error) { return this.failed(id, 'Workspace connection failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
   }
@@ -136,9 +152,55 @@ export class Service {
       const adapter = this.makeAdapter(parsed.data.token);
       const identity = await this.identity(adapter, id);
       const access = await this.readAccess(adapter);
-      await this.saveCredential(current, parsed.data.token, this.proof(identity, access), true);
+      await this.saveCredential(current, parsed.data.token, { ...this.proof(identity, access), auth_kind: 'internal' }, true);
       return this.connectionReply(id);
     } catch (error) { return this.failed(id, 'Workspace reauthorization failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
+  }
+  private async connectOAuth(credential: OAuthCredential, input: { label: string; workspace_id?: string }) {
+    let id: string | null = null;
+    try {
+      this.assertTestName(input.label);
+      const adapter = this.makeAdapter(credential.access_token, credential);
+      const identity = await this.identity(adapter, input.workspace_id ?? credential.identity.workspace_id);
+      id = identity.workspace_id;
+      const current = this.store.list().find(w => w.id === id);
+      if (!input.workspace_id && current)
+        throw new DomainError('WORKSPACE_EXISTS', 'This workspace is already connected. Select its Reauthorize action to replace the credential.');
+      if (input.workspace_id && !current) throw new DomainError('UNKNOWN_WORKSPACE', 'The workspace is no longer registered.');
+      const access = await this.readAccess(adapter);
+      const config = current ?? WorkspaceInput.parse({ id, label: input.label || identity.workspace_name.slice(0, 80), environment: 'test' });
+      await this.saveCredential(config, encodeCredential(credential), { ...this.proof(identity, access), auth_kind: 'oauth' }, Boolean(input.workspace_id));
+      return this.connectionReply(id);
+    } catch (error) { return this.failed<WorkspaceView>(id, 'Workspace OAuth connection failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
+  }
+  async refreshOAuth(id: string): Promise<Result<WorkspaceView>> {
+    const owner = randomUUID(); let locked = false, refreshed = false;
+    try {
+      const current = this.store.list().find(w => w.id === id);
+      if (!current) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered test workspace.');
+      if (current.auth_kind !== 'oauth') throw new DomainError('INVALID_INPUT', 'This workspace uses an Internal Connection. Use Reauthorize to replace its token.');
+      this.assertTestName(current.label);
+      if (!this.store.acquireConnection(id, owner)) throw new DomainError('CONNECTION_BUSY', 'Another instance is updating this connection.');
+      locked = true;
+      const raw = await this.vault.read(id), previous = raw ? decodeCredential(raw).oauth : undefined;
+      if (!previous?.refresh_token) throw new DomainError('AUTH_REQUIRED', 'No OAuth refresh token is stored. Use Reauthorize to connect this workspace again.');
+      if (previous.identity.workspace_id.toLowerCase() !== id.toLowerCase()) throw new DomainError('WORKSPACE_MISMATCH', 'The OAuth credential belongs to a different workspace.');
+      const secret = await this.vault.read(`oauth-client/${previous.client_id}`);
+      if (!secret) throw new DomainError('AUTH_REQUIRED', 'The OAuth client secret is missing. Restore its settings, then Reauthorize.');
+      const credential = await this.oauth.exchange.token(previous.client_id, secret, { refresh_token: previous.refresh_token }, previous);
+      refreshed = true;
+      if (credential.identity.workspace_id.toLowerCase() !== id.toLowerCase() || credential.identity.bot_id !== previous.identity.bot_id)
+        throw new DomainError('WORKSPACE_MISMATCH', 'The refreshed token returned a different workspace or connection identity. Reauthorize this workspace.');
+      const adapter = this.makeAdapter(credential.access_token, credential), identity = await this.identity(adapter, id), access = await this.readAccess(adapter);
+      const encoded = encodeCredential(credential);
+      await this.vault.write(id, encoded);
+      if (await this.vault.read(id) !== encoded) throw new Error();
+      this.store.saveConnection(current, { ...this.proof(identity, access), auth_kind: 'oauth' }, true, owner);
+      return this.connectionReply(id);
+    } catch (error) {
+      const failure = refreshed ? new DomainError('CREDENTIAL_STATE_UNCERTAIN', 'Notion renewed the credential, but saving or validation could not be confirmed. Use Reauthorize; the old refresh token may already be consumed.') : safeError(error);
+      return this.failed(id, 'OAuth token refresh failed', failure, !['CONNECTION_BUSY','INVALID_INPUT','UNKNOWN_WORKSPACE'].includes(failure.code));
+    } finally { if (locked) this.store.releaseConnection(id, owner); }
   }
   private async read<T>(id: string, action: string, callback: (adapter: NotionAdapter) => Promise<T>): Promise<Result<T>> {
     try {
@@ -255,13 +317,13 @@ export class Service {
         { key: 'vault', label: 'Credential vault', status: this.vaultReady ? 'pass' : 'error', detail: this.vaultReady ? 'Windows Credential Manager available' : 'Windows Credential Manager unavailable' },
         { key: 'notion', label: 'Notion connections', status: workspaces.length >= 2 && workspaces.every(w => w.status === 'Connected') ? 'pass' : 'pending',
           detail: `${workspaces.filter(w => w.status === 'Connected').length} verified / ${workspaces.length} configured · two test workspaces required` },
-        { key: 'transport', label: 'Management transport', status: 'pass', detail: 'Private process pipes · no listening port' },
+        { key: 'transport', label: 'Management transport', status: 'pass', detail: 'Private process pipes · OAuth callback listens only during authorization on localhost:8765' },
       ],
       workspaces, activity: this.store.activity(), projects: this.store.projects(),
       clients: this.clients.snapshot(),
       jobs: [], settings: { read_only: true, remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
         data_dir: this.store.directory, updater_configured: false },
-      capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: true, group_chat: true, auto_wake: false, migration: false, content_write: false },
+      capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: true, group_chat: true, auto_wake: true, migration: false, content_write: false },
     };
   }
 }

@@ -16,7 +16,10 @@ const service = new Service(store, new WindowsVault());
 await service.initialize();
 
 if (mode === 'management') {
+  service.wake.start();
   await runManagement(service);
+  await service.wake.stopAll();
+  await service.oauth.close();
   store.close();
 } else if (mode === 'mcp') {
   const actor = ChatActor.safeParse(flag('--client'));

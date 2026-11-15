@@ -27,7 +27,7 @@ export async function runClientsChatFlow({ getPage, getBrowser, state, seed, bas
   const overview = await rpc('chat_overview', {});
   assert.equal(overview.data.workspaces.length, 2);
   assert.equal(overview.data.workspaces.find(w => w.workspace_id === a).agent_unread.codex, 1);
-  assert.equal(overview.data.auto_wake, false);
+  assert.equal(overview.data.auto_wake, true);
   await page.getByRole('navigation').getByRole('button', { name: 'Clients', exact: true }).click();
   const claude = page.getByRole('region', { name: 'Claude Code integration', exact: true });
   await claude.getByText('Not installed', { exact: true }).waitFor();

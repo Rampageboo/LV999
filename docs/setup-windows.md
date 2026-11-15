@@ -1,6 +1,6 @@
 # Windows bootstrap
 
-Milestone 1 is in progress. Workspace connection, page browsing, routing, AI-client setup and local group chat are implemented; Notion content remains read-only. Two real test workspaces have not yet been created, so real acceptance is still pending. Do not use Vibecode or Honour. Closing the window stops its backend. Tray/background operation, autostart, automatic Agent wake and single-instance recovery remain later work.
+Milestone 1 is in progress. Source now includes Workspace OAuth, page browsing/routing, AI-client setup, group chat and explicit @ wake/session binding; Notion content remains read-only. The Owner reports creating test Workspaces, but their real authorization/acceptance remains pending. Do not use Vibecode or Honour. The changed native host cannot currently be built locally because Smart App Control blocks compiler dependency DLLs; the previously opened executable does not include the new OAuth/wake UI. Closing the new host pauses enabled bindings and stops its backend. Tray/background operation, autostart and full single-instance recovery remain later work.
 
 ## Build and run
 
@@ -68,6 +68,18 @@ npm run test:routing-gui
 
 Real two-workspace route/permission acceptance is still pending. Do not put workspace, page or data-source IDs in public docs or fixtures. Route removal, disconnect, content CRUD and full migration remain unimplemented.
 
+## One OAuth app, multiple Workspaces
+
+This flow requires a successful build of the changed native host. In Notion's Developer portal create one public OAuth connection with the intended installation scope, and register exactly `http://localhost:8765/oauth/notion/callback`. Its development Workspace is not the only Workspace it can authorize when its scope permits others. Workspaces themselves are still created manually in Notion.
+
+In LV999 Workspaces → **Connect with Notion**, enter that app's client ID and client secret locally and save. The secret field clears immediately and the secret goes only to Windows Credential Manager under `com.rampageboo.lv999/oauth-client/<client-id>`. Do not send it in chat. Choose **Authorize workspace in Notion**, select the test Workspace and shared pages, and allow access. The callback verifies identity and a read-only search before saving a separate Workspace vault entry and making its local group chat available. Repeat for the second Workspace using the same app settings.
+
+Start each authorization from LV999; a copied Developer portal URL without LV999's current state cannot complete the callback. The listener opens only while authorizing, is loopback-only and expires after ten minutes. Cancel closes it. If port 8765 is occupied, authorization stops with a clear error rather than killing its owner. Keep LV999 open through exchange/verification; the result appears there, not in the callback page.
+
+**Reauthorize** on an OAuth Workspace enforces that exact target. **Refresh OAuth token** explicitly rotates its saved access/refresh pair and rechecks identity/read access; no automatic token-grant retry is performed. Revoked/unrefreshable credentials require Reauthorize. If remote refresh succeeded but local persistence is uncertain, reauthorize rather than retrying a possibly consumed refresh token. Access/refresh tokens and their authoritative identity evidence share one atomic vault blob; SQLite stores no secrets. A changed OAuth app setting does not replace existing Workspace credentials or erase the earlier per-client secret.
+
+The current OAuth tests use scripted Notion responses and generated vault secrets. Real consent/token exchange, page access and two-Workspace isolation still require acceptance with the Owner's test spaces. [Notion's public connection guide](https://developers.notion.com/guides/connections-and-tokens/public-integrations/overview) explains the multi-Workspace scope; [authorization](https://developers.notion.com/guides/authorization/overview) describes state/code exchange and refresh.
+
 ## AI Clients
 
 1. Open Clients → **Detect clients**. CLI version/path and the known user configuration path are detected. Only the LV999 entry's state is returned; other server settings/secrets are not displayed. Project/managed scopes are outside this detector. Missing/different/invalid entries are never called Connected.
@@ -87,14 +99,19 @@ Every registered Workspace has a local group, even without a Project. Use **Open
 
 The chat uses ordinary message bubbles, participant names, a scrolling history and fixed input. Enter sends; Shift+Enter adds a newline. Use Reply for a quote, search loaded messages or load older history. Workspace groups include all their topics; project views also retain historical messages after reassignment. Sending a project message checks the current local route revision/Workspace. A changed target requires a new valid topic/route selection.
 
-You/Claude/Codex have independent receipts. Previews and handshake tests do not mark a message read. A full-body read API records only that reader; **Read via API is not proof of model understanding, Ack or task completion**. No Agent presence monitor is implemented. You may ask a configured Claude/Codex client to use `list_unread`, `read_message` and `send_message` in its allowed groups.
+You/Claude/Codex have independent receipts. Previews and handshake tests do not mark a message read. A full-body read API records only that reader; **Read via API is not proof of model understanding or task completion**. A native wake records consumption only after a matching reply receipt, and still does not claim task Done. Presence shows LV999 binding/turn state, not every native desktop conversation. Configured clients can also use `list_unread`, `read_message`, `send_message` and `ack_message` in their allowed groups.
 
-Ordinary text, including typed `@Claude`/`@Codex`, only saves a message. Automatic wake is off; structured mentions are rejected until the native bridge phase. The reference Messenger's complete supervisor/recovery/task acceptance remains pending. See [the adapted scope](agent-messenger.md).
+Ordinary text, including typed `@Claude`/`@Codex`, only saves a message. Open **Agent sessions**, choose a native model/effort and enable the desired actor for this Workspace or project. The first explicitly selected @ chip creates a new LV999-owned session automatically; following mentions resume it. Existing conversations are never attached. Native turns are currently message-only, with no project tools or commands, and use the native account's quota. Current verified Codex model/default is `gpt-5.6-sol`, low effort; the model field is editable for account availability. Claude's local sign-in is currently missing; use `claude auth login` locally before its real acceptance.
 
-Messages/receipts persist in the local registry; uninstall retains them. Don't paste credentials into chat. UI polling is local and visibility-scoped; there is no unauthenticated HTTP/WebSocket listener. Tests use scripted MCP agents and synthetic messages, not real model replies:
+**Stop** persists pause before interrupting the owned process and fences late replies. New mentions, incoming acknowledgements, restarts and stale settings cannot resume it. **Resume** explicitly allows future mentions; cancelled/blocked messages require their own **Retry**. Authentication/quota/errors and unknown expired outcomes block rather than auto-retrying. Normal app exit pauses enabled bindings. The reference Messenger's complete task supervisor/recovery remains pending. See [the adapted scope](agent-messenger.md).
+
+Messages/receipts persist in the local registry; uninstall retains them. Don't paste credentials into chat. UI polling is local and visibility-scoped; there is no HTTP/WebSocket management service. OAuth has a separate short-lived loopback callback. Scripted tests do not consume model quota. Native wake probes below deliberately do and are separate from `npm test`:
 
 ```powershell
 npm run test:clients-chat-gui
+# Native account/model activity; app-owned sessions only:
+node scripts/wake-native-probe.mjs
+node scripts/wake-native-probe.mjs --stop-only
 ```
 
 ## Developer fallback

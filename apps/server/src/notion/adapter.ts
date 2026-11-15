@@ -1,5 +1,6 @@
 import { Client, isNotionClientError } from '@notionhq/client';
 import { NOTION_VERSION, type ErrorCode } from '../../../../packages/contracts/src/index.js';
+import type { OAuthEvidence } from './oauth-credential.js';
 
 export class DomainError extends Error {
   constructor(readonly code: ErrorCode, message: string) { super(message); }
@@ -13,12 +14,20 @@ export interface NotionAdapter {
 // Only explicitly allowed read endpoints are exposed. No arbitrary URLs or raw request method.
 export class OfficialNotionAdapter implements NotionAdapter {
   private client: Client;
-  constructor(secret: string, fetchImplementation?: typeof fetch) {
+  constructor(secret: string, fetchImplementation?: typeof fetch, private oauth?: OAuthEvidence) {
     this.client = new Client({ auth: secret, notionVersion: NOTION_VERSION, timeoutMs: 15000, retry: false,
       logLevel: undefined, logger: () => {}, ...(fetchImplementation ? { fetch: fetchImplementation } : {}) });
   }
   async identity(): Promise<Identity> {
     const me = await this.client.users.me({});
+    if (this.oauth) {
+      const expected = this.oauth.identity;
+      if (me.type === 'person' && this.oauth.owner_id && me.id === this.oauth.owner_id) return expected;
+      if (me.type === 'bot' && me.id === expected.bot_id &&
+        (!me.bot.workspace_id || me.bot.workspace_id.toLowerCase() === expected.workspace_id.toLowerCase()))
+        return { ...expected, workspace_name: me.bot.workspace_name || expected.workspace_name };
+      throw new DomainError('WORKSPACE_MISMATCH', 'The OAuth token identity no longer matches its authorization. Reauthorize this workspace.');
+    }
     if (me.type !== 'bot' || !me.bot.workspace_id || !me.bot.workspace_name)
       throw new DomainError('IDENTITY_UNAVAILABLE', 'The token did not expose a verifiable workspace identity.');
     return { workspace_id: me.bot.workspace_id.toLowerCase(), workspace_name: me.bot.workspace_name, bot_id: me.id };

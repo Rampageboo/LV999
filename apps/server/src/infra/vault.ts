@@ -12,6 +12,10 @@ export interface Vault {
 }
 export class WindowsVault implements Vault {
   constructor(private script = join(dirname(fileURLToPath(import.meta.url)), 'credential-vault.ps1')) {}
+  private target(key: string) {
+    if (key.startsWith('oauth-client/')) return `com.rampageboo.lv999/oauth-client/${z.uuid().parse(key.slice(13)).toLowerCase()}`;
+    return `com.rampageboo.lv999/notion/${z.uuid().parse(key).toLowerCase()}`;
+  }
   private invoke(input: object): Promise<{ok: boolean; secret?: string}> {
     return new Promise((resolve, reject) => {
       if (process.platform !== 'win32') return reject(new Error('WINDOWS_VAULT_REQUIRED'));
@@ -33,23 +37,23 @@ export class WindowsVault implements Vault {
     });
   }
   async read(workspaceId: string) {
-    const id = z.uuid().parse(workspaceId).toLowerCase();
+    const target = this.target(workspaceId);
     try {
-      const response = await this.invoke({ operation: 'read', target: `com.rampageboo.lv999/notion/${id}` });
+      const response = await this.invoke({ operation: 'read', target });
       return response.ok ? response.secret ?? null : null;
     } catch { throw new DomainError('VAULT_UNAVAILABLE', 'Windows Credential Manager could not be read. Check this Windows user session before reauthorizing.'); }
   }
   async write(workspaceId: string, secret: string) {
-    const id = z.uuid().parse(workspaceId).toLowerCase();
+    const target = this.target(workspaceId);
     try {
-      const response = await this.invoke({ operation: 'write', target: `com.rampageboo.lv999/notion/${id}`, secret });
+      const response = await this.invoke({ operation: 'write', target, secret });
       if (!response.ok) throw new Error('WRITE_FAILED');
     } catch { throw new DomainError('VAULT_UNAVAILABLE', 'The credential could not be saved to Windows Credential Manager.'); }
   }
   async remove(workspaceId: string) {
-    const id = z.uuid().parse(workspaceId).toLowerCase();
+    const target = this.target(workspaceId);
     try {
-      const response = await this.invoke({ operation: 'remove', target: `com.rampageboo.lv999/notion/${id}` });
+      const response = await this.invoke({ operation: 'remove', target });
       if (!response.ok) throw new Error('REMOVE_FAILED');
     } catch { throw new DomainError('VAULT_UNAVAILABLE', 'The credential could not be restored in Windows Credential Manager.'); }
   }

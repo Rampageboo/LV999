@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import type { Snapshot, WorkspaceView } from '../../../../packages/contracts/src/index.js';
-import { connectWorkspace, reauthorizeWorkspace, verifyWorkspace } from '../ipc/backend.js';
+import { connectWorkspace, reauthorizeWorkspace, verifyWorkspace, refreshOAuth } from '../ipc/backend.js';
 import { EmptyState, Status } from '../components/Primitives.js';
 import { WorkspaceConnectionDialog } from '../components/WorkspaceConnectionDialog.js';
 import { PageBrowser } from '../components/PageBrowser.js';
 import type { ChatSelection } from './Chats.js';
+import { NotionOAuthDialog } from '../components/NotionOAuthDialog.js';
 export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refresh: () => Promise<void>; openChat: (selection: ChatSelection) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -12,10 +13,16 @@ export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refres
   const [dialog, setDialog] = useState<{ workspace?: WorkspaceView } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [browsing, setBrowsing] = useState<string | null>(null);
+  const [oauth, setOAuth] = useState<{ workspace?: WorkspaceView } | null>(null);
   async function verify(id: string) {
     setBusy(id); setMessage(null); setWarnings([]);
     try { const response = await verifyWorkspace(id); setMessage(response.ok ? 'Workspace identity and read access verified.' : `${response.code}: ${response.errors.join(' ')}`); setWarnings(response.warnings); await refresh(); }
     catch { setMessage('Backend unavailable. Restart LV999 to retry.'); } finally { setBusy(null); }
+  }
+  async function renew(id: string) {
+    setBusy(id); setMessage(null); setWarnings([]);
+    try { const response = await refreshOAuth(id); setMessage(response.ok ? 'OAuth token renewed. Workspace identity and read access verified.' : `${response.code}: ${response.errors.join(' ')}`); setWarnings(response.warnings); await refresh(); }
+    catch { setMessage('The refresh result is unknown. Reauthorize this workspace before using it again.'); } finally { setBusy(null); }
   }
   function openConnection(workspace?: WorkspaceView) { setFailure(null); setDialog({ workspace }); }
   async function submit(label: string, token: string) {
@@ -37,6 +44,7 @@ export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refres
     finally { setBusy(null); }
   }
   return <><div className="section-toolbar"><p>Connections are verified before saving. Tokens stay in Windows Credential Manager.</p>
+    <button disabled={busy !== null} onClick={() => setOAuth({})}>Connect with Notion</button>
     <button className="primary" disabled={busy !== null || !data.capabilities.connect_in_gui} onClick={() => openConnection()}>Connect workspace</button></div>
     {message ? <p role="status" className="notice">{message}</p> : null}
     {warnings.map(warning => <p className="notice" key={warning}>{warning}</p>)}
@@ -48,11 +56,13 @@ export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refres
       {w.read_access?.sampled_objects === 0 ? <p className="hint">No shared objects were found at the last connection check. Share a test root page with this connection; search indexing may take time. This is not a full workspace inventory.</p> : null}
       {w.message ? <p className="notice">{w.code}: {w.message}</p> : null}
       <div className="workspace-actions"><button onClick={() => void verify(w.id)} disabled={busy !== null}>{busy === w.id ? 'Checking…' : 'Verify connection'}</button>
-        <button onClick={() => openConnection(w)} disabled={busy !== null}>Reauthorize</button>
+        <button onClick={() => w.auth_kind === 'oauth' ? setOAuth({ workspace: w }) : openConnection(w)} disabled={busy !== null}>Reauthorize</button>
+        {w.auth_kind === 'oauth' ? <button disabled={busy !== null} onClick={() => void renew(w.id)}>Refresh OAuth token</button> : null}
         <button onClick={() => openChat({ workspace_id: w.id })} disabled={busy !== null}>Open group chat</button>
         <button disabled={busy !== null || !data.capabilities.browse_pages} onClick={() => setBrowsing(browsing === w.id ? null : w.id)}>{browsing === w.id ? 'Hide pages' : 'Browse pages'}</button></div>
       {browsing === w.id ? <PageBrowser key={w.id} workspaceId={w.id} onStateChange={refresh} /> : null}
-    </section>)}</div> : <EmptyState title="No test workspaces configured">Create a test workspace and its Internal Connection in Notion, then select Connect workspace. You do not need to enter a Workspace ID. Vibecode and Honour remain blocked.</EmptyState>}
+    </section>)}</div> : <EmptyState title="No test workspaces configured">Select Connect with Notion to authorize through an OAuth app, or Connect workspace to enter an Internal Connection token. Each test Workspace gets its own group chat. Vibecode and Honour remain blocked.</EmptyState>}
     {dialog ? <WorkspaceConnectionDialog workspace={dialog.workspace} busy={busy !== null} failure={failure} onClose={() => setDialog(null)} onSubmit={submit} /> : null}
+    {oauth ? <NotionOAuthDialog workspace={oauth.workspace} onClose={() => setOAuth(null)} onConnected={refresh} /> : null}
   </>;
 }

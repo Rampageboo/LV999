@@ -13,6 +13,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, config TEXT NOT NULL, verification TEXT);
       CREATE TABLE IF NOT EXISTS activity (seq INTEGER PRIMARY KEY, event TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS connection_locks (id TEXT PRIMARY KEY, owner TEXT NOT NULL, expires INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS oauth_settings (singleton INTEGER PRIMARY KEY CHECK(singleton=1), client_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS project_routes (
         project_key TEXT PRIMARY KEY, name_lookup TEXT NOT NULL, workspace_id TEXT NOT NULL REFERENCES workspaces(id),
         revision INTEGER NOT NULL, route TEXT NOT NULL);

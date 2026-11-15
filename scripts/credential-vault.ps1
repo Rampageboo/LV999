@@ -53,7 +53,7 @@ try {
     @{ok=($found -or $vaultError -eq 1168)} | ConvertTo-Json -Compress
     exit 0
   }
-  if ($request.operation -notin @('read','write','remove') -or $request.target -notmatch '^com\.rampageboo\.lv999/notion/[0-9a-f-]{36}$') { throw 'Invalid operation' }
+  if ($request.operation -notin @('read','write','remove') -or $request.target -notmatch '^com\.rampageboo\.lv999/(notion|oauth-client)/[0-9a-f-]{36}$') { throw 'Invalid operation' }
   if ($request.operation -eq 'write') {
     if ($request.secret -isnot [string] -or $request.secret.Length -lt 1 -or $request.secret.Length -gt 2048) { throw 'Invalid secret' }
     $writeBlob = [Runtime.InteropServices.Marshal]::StringToCoTaskMemUni($request.secret)
