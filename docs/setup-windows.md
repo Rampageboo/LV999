@@ -1,6 +1,6 @@
 # Windows bootstrap
 
-Milestone 1 is in progress. Source now includes Workspace OAuth, page browsing/routing, AI-client setup, group chat and explicit @ wake/session binding; Notion content remains read-only. The Owner reports creating test Workspaces, but their real authorization/acceptance remains pending. Do not use Vibecode or Honour. The changed native host cannot currently be built locally because Smart App Control blocks compiler dependency DLLs; the previously opened executable does not include the new OAuth/wake UI. Closing the new host pauses enabled bindings and stops its backend. Tray/background operation, autostart and full single-instance recovery remain later work.
+Milestone 1 is in progress. Source includes Workspace OAuth, page browsing/routing, AI-client setup, group chat and explicit @ wake/session binding; Notion content remains read-only. The Owner reports creating test Workspaces, but their real OAuth authorization/acceptance remains pending. Do not use Vibecode or Honour. Local compilation remains blocked by Smart App Control's compiler-DLL policy; an authorized Windows CI build has now passed 109 tests, produced installer/portable artifacts and been launched successfully on this host. Closing the new host pauses enabled bindings and stops its backend. Tray/background operation, autostart and full single-instance recovery remain later work. See [CI/launch evidence](qa/2026-11-16-windows-ci-oauth.md).
 
 ## Build and run
 

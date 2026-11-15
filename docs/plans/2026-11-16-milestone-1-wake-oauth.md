@@ -21,3 +21,7 @@ Source/Node implementation, 108 automated tests, built frontend interaction test
 The new native Rust host has **not** passed build or native GUI acceptance: Windows Smart App Control blocked freshly compiled Rust macro dependency DLLs. The old open executable was preserved. No security setting was disabled, no blocked DLL was relocated/re-signed and no new installer is claimed. Complete the native build in an approved Windows build environment (for example repository CI), then test the new host and actual authorization. Details: [QA record](../qa/2026-11-16-milestone-1-wake-oauth.md).
 
 M1 as a whole remains open: this slice does not complete content CRUD, migration, production Workspace access or the independent clean-machine gate.
+
+## Authorized CI follow-up
+
+The Owner subsequently approved pushing the branch, building in Windows CI and opening the preview. The latest runtime/UI commit passed 109 tests, bundled Node/MCP smoke and a full native/NSIS build. Both installer and portable artifacts were downloaded and their commit/file hashes verified. The portable native app started successfully and displayed the existing Internal Connection plus OAuth setup/switch actions. A normal close of the preceding CI preview also reaped its owned backend. Real OAuth authorization remains waiting on the Owner's local client-secret entry and consent. Details: [CI follow-up](../qa/2026-11-16-windows-ci-oauth.md).

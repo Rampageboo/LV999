@@ -15,7 +15,7 @@ Observed locally: Claude Code **2.1.205**, Codex CLI **0.144.1**. Handshake test
 | Codex Stop | **Verified**: a separate owned turn was interrupted immediately after delivery; it returned CANCELLED and no accepted reply. Durable pause/late-reply fencing/restart tests also pass with a scripted bridge. |
 | Codex queue | Not advertised by this installed CLI's command list; do not depend on it. `queue --help` returned the root help rather than proving queue support. |
 | Existing desktop chat synchronization | Unverified. Native MCP discovery does not establish control/synchronization of the Owner's currently open desktop conversations. |
-| Automatic wake and binding | Implemented for explicitly selected @ targets, with app-created sessions and queued busy turns. Scripted UI/backend tests verify pause, retry and same-session behavior. New native GUI build is blocked by local Windows compiler-DLL policy. |
+| Automatic wake and binding | Implemented for explicitly selected @ targets, with app-created sessions and queued busy turns. Scripted UI/backend tests verify pause, retry and same-session behavior. Windows CI built the native preview and it was launched on this host; live native chat/Claude/Notion acceptance remains distinct. |
 | Task execution/completion | Not implemented. Native turns are message-only; a matching consumption acknowledgement is not task Done. Claude model success and full supervisor acceptance remain unverified. |
 
 Installed protocol schemas were generated locally and checked rather than assuming the current website exactly matched 0.144.1. For example this installation's status-list input does not have the documented newer `serverName` field, so the test isolates the profile instead of relying on that filter.
