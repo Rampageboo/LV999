@@ -1,0 +1,16 @@
+node_modules/
+dist/
+target/
+.tools/
+.runtime/
+apps/desktop/src-tauri/runtime/
+apps/desktop/src-tauri/gen/
+*.local.*
+*.key
+*.key.pub
+test-results/
+playwright-report/
+coverage/
+*.db
+*.db-shm
+*.db-wal

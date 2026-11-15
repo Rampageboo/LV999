@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "Local LV999 main window. Only the two typed management commands; no shell, filesystem or network plugins.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

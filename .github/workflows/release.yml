@@ -1,0 +1,44 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.13.1
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - name: Check release version
+        shell: pwsh
+        run: |
+          $appVersion = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ("v$appVersion" -ne "${{ github.ref_name }}") { throw 'Tag and app version differ' }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check:public
+      - run: npm test
+      - run: npm run build:bundle
+      - run: npm run test:smoke
+      - name: Build signed updater artifacts and draft release
+        uses: tauri-apps/tauri-action@action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: LV999 ${{ github.ref_name }}
+          releaseBody: "Milestone 0 preview. Read-only bootstrap; real workspace acceptance and later milestones remain required."
+          releaseDraft: true
+          prerelease: true
+          args: --bundles nsis --config src-tauri/tauri.release.conf.json
+          uploadUpdaterJson: true

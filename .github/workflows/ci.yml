@@ -1,0 +1,26 @@
+name: Check
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  milestone-zero:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.13.1
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check:public
+      - run: npm test
+      - run: npm run build:bundle
+      - run: npm run test:smoke
+      - run: node scripts/tauri.mjs build --no-bundle

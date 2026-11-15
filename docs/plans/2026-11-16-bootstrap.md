@@ -31,3 +31,9 @@
 - 规格 Milestone 0 验收项逐条通过。
 - 在未安装 Node.js 的 Windows 环境中，安装包能启动后端。
 - `git grep` 确认仓库中没有 token、Notion 页面或数据源 ID。
+
+## Milestone 0 进度（2026-11-16）
+
+工程部分已实现并在现有 Windows 主机通过构建、25 项自动化测试、真实 MCP v2 握手/调用、七页原生 GUI 巡检和安装/卸载检查。详见 [验收记录](../qa/2026-11-16-milestone-0.md)。
+
+Owner 已确认两个测试 Workspace 尚未创建，本轮先完成可验证的工程部分。因此 **Milestone 0 整体尚未验收通过**：真实双空间只读连通，以及独立无 Node 的 Windows 环境安装仍待完成。现有主机已验证清空系统 Node PATH 后，安装版和独立暂存后端均能使用随包 runtime。
