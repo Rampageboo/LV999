@@ -17,6 +17,7 @@
     "test:smoke": "node scripts/smoke.mjs",
     "test:desktop": "node scripts/desktop-smoke.mjs",
     "test:workspace-gui": "node scripts/workspace-gui-smoke.mjs",
+    "test:routing-gui": "node scripts/workspace-gui-smoke.mjs apps/desktop/src-tauri/target/release/lv999-desktop.exe --routing",
     "check:public": "node scripts/check-public-repo.mjs",
     "prepare:runtime": "node scripts/prepare-runtime.mjs",
     "package:desktop": "node scripts/tauri.mjs build --bundles nsis",

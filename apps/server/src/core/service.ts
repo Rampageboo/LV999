@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { APP_ID, APP_VERSION, NOTION_VERSION, ConnectWorkspaceInput, ReauthorizeWorkspaceInput, WorkspaceInput,
-  result, type Result, type Snapshot, type WorkspaceConfig, type WorkspaceView } from '../../../../packages/contracts/src/index.js';
+  BrowsePagesInput, InspectPageInput, SaveProjectInput, ResolveProjectInput,
+  result, type Result, type Snapshot, type WorkspaceConfig, type WorkspaceView, type AccessiblePage, type PageBatch, type ProjectRoute } from '../../../../packages/contracts/src/index.js';
 import { DomainError, OfficialNotionAdapter, safeError, type NotionAdapter, type Identity } from '../notion/adapter.js';
-import { Store } from '../infra/store.js';
+import { Store, projectNameLookup } from '../infra/store.js';
+import { pageBatch, pageMetadata, pageReference } from '../notion/page-metadata.js';
 import type { Vault } from '../infra/vault.js';
 
 export class Service {
@@ -145,6 +147,88 @@ export class Service {
   }
   search(id: string, query: string, cursor?: string) { return this.read(id, 'Workspace search', a => a.search(query, cursor)); }
   page(id: string, pageId: string) { return this.read(id, 'Page read', a => a.page(pageId)); }
+  async browsePages(input: unknown): Promise<Result<PageBatch>> {
+    const parsed = BrowsePagesInput.safeParse(input);
+    if (!parsed.success) return result<PageBatch>(null, null, 'INVALID_INPUT', ['Select a test workspace and a valid title query/cursor.']);
+    const { workspace_id, query, start_cursor } = parsed.data;
+    const reply = await this.read(workspace_id, 'Accessible pages searched', async adapter =>
+      pageBatch(await adapter.search(query, start_cursor, true), workspace_id, start_cursor));
+    if (reply.ok) {
+      reply.warnings.push('Search is an index of shared pages, not a complete workspace inventory. Refresh for newly shared pages or check an exact page link/ID.');
+      if (reply.data!.skipped_objects) reply.warnings.push(`${reply.data!.skipped_objects} incomplete or unsupported objects were omitted.`);
+    }
+    return reply;
+  }
+  private async inspect(workspaceId: string, pageId: string) {
+    const { adapter, identity } = await this.verifiedAdapter(workspaceId);
+    const page = pageMetadata(await adapter.page(pageId), workspaceId);
+    if (page.id !== pageId) throw new DomainError('INVALID_RESPONSE', 'Notion returned a different page ID. No mapping was changed.');
+    this.store.verification(workspaceId, this.proof(identity, this.store.list().find(w => w.id === workspaceId)?.read_access ?? null));
+    return page;
+  }
+  private targetFailure<T>(id: string | null, action: string, error: unknown): Result<T> {
+    const failure = safeError(error);
+    // A missing/unshared object is not proof that the workspace connection itself failed.
+    const connectionFailure = ['AUTH_REQUIRED', 'WORKSPACE_MISMATCH', 'TEST_WORKSPACE_ONLY', 'VAULT_UNAVAILABLE', 'NETWORK_ERROR'].includes(failure.code);
+    return this.failed<T>(id, action, failure, connectionFailure);
+  }
+  async inspectPage(input: unknown): Promise<Result<AccessiblePage>> {
+    const parsed = InspectPageInput.safeParse(input);
+    if (!parsed.success) return result<AccessiblePage>(null, null, 'INVALID_INPUT', ['Select a workspace and enter a page ID or Notion link.']);
+    const id = parsed.data.workspace_id;
+    try {
+      const page = await this.inspect(id, pageReference(parsed.data.reference));
+      this.store.log({ level: 'info', action: 'Page access checked', workspace_id: id, code: 'OK' });
+      const reply = result(page, id); reply.resource_url = page.url;
+      return reply;
+    } catch (error) { return this.targetFailure(id, 'Page access check failed', error); }
+  }
+  private async rootPage(workspaceId: string, pageId: string) {
+    const page = await this.inspect(workspaceId, pageId);
+    if (!page.root_eligible) throw new DomainError('INELIGIBLE_ROOT', page.root_reason!);
+    return page;
+  }
+  async saveProject(input: unknown): Promise<Result<ProjectRoute>> {
+    const parsed = SaveProjectInput.safeParse(input);
+    if (!parsed.success) return result<ProjectRoute>(null, null, 'INVALID_INPUT', ['Provide a unique project key, name, workspace, page ID and expected route revision.']);
+    const value = parsed.data;
+    try {
+      const root = await this.rootPage(value.workspace_id, value.root_page_id);
+      const route = this.store.saveProject(value, root);
+      if (!route) throw new DomainError('ROUTE_CONFLICT', 'This project key was added or changed by another editor. Refresh the mappings and reopen the editor; nothing was overwritten.');
+      const reply = result(route, value.workspace_id);
+      reply.project_key = route.project_key; reply.resource_url = root.url;
+      return reply;
+    } catch (error) {
+      const reply = this.targetFailure<ProjectRoute>(value.workspace_id, 'Project route save failed', error);
+      reply.project_key = value.project_key;
+      return reply;
+    }
+  }
+  listProjects() { return result(this.store.projects()); }
+  async resolveProject(input: unknown): Promise<Result<ProjectRoute>> {
+    const parsed = ResolveProjectInput.safeParse(input);
+    if (!parsed.success) return result<ProjectRoute>(null, null, 'INVALID_INPUT', ['Resolve by exactly one project key or exact project name.']);
+    const routes = this.store.projects().filter(route => parsed.data.project_key ? route.project_key === parsed.data.project_key :
+      projectNameLookup(route.name) === projectNameLookup(parsed.data.name!));
+    if (!routes.length) return result<ProjectRoute>(null, null, 'UNKNOWN_PROJECT', ['No matching project route is configured.']);
+    if (routes.length !== 1) return result<ProjectRoute>(null, null, 'AMBIGUOUS_TARGET', ['More than one project has this name. Select an exact project key; no workspace was guessed.']);
+    const route = routes[0];
+    try {
+      const root = await this.rootPage(route.workspace_id, route.root_page.id);
+      // Do not return a target that changed while its live validation was in flight.
+      if (this.store.projects().find(current => current.project_key === route.project_key)?.revision !== route.revision)
+        throw new DomainError('ROUTE_CONFLICT', 'The mapping changed during validation. Refresh and resolve again.');
+      const reply = result({ ...route, root_page: root, validated_at: new Date().toISOString() }, route.workspace_id);
+      reply.project_key = route.project_key; reply.resource_url = root.url;
+      this.store.log({ level: 'info', action: `Project route ${route.project_key} resolved`, workspace_id: route.workspace_id, code: 'OK' });
+      return reply;
+    } catch (error) {
+      const reply = this.targetFailure<ProjectRoute>(route.workspace_id, 'Project route resolution failed', error);
+      reply.project_key = route.project_key;
+      return reply;
+    }
+  }
   snapshot(): Snapshot {
     const workspaces = this.store.list();
     return {
@@ -158,11 +242,11 @@ export class Service {
           detail: `${workspaces.filter(w => w.status === 'Connected').length} verified / ${workspaces.length} configured · two test workspaces required` },
         { key: 'transport', label: 'Management transport', status: 'pass', detail: 'Private process pipes · no listening port' },
       ],
-      workspaces, activity: this.store.activity(), projects: [],
+      workspaces, activity: this.store.activity(), projects: this.store.projects(),
       clients: ['Claude Code', 'Codex'].map(name => ({ name, status: 'Not tested', detail: 'Client configuration and live handshake arrive in Milestone 1.' })),
       jobs: [], settings: { read_only: true, remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
         data_dir: this.store.directory, updater_configured: false },
-      capabilities: { connect_in_gui: true, routing: false, client_config: false, migration: false, content_write: false },
+      capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: false, migration: false, content_write: false },
     };
   }
 }

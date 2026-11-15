@@ -3,7 +3,8 @@ import type { Snapshot } from '../../../packages/contracts/src/index.js';
 import { getSnapshot } from './ipc/backend.js';
 import { Dashboard } from './screens/Dashboard.js';
 import { Workspaces } from './screens/Workspaces.js';
-import { ProjectRouting, AIClients, MigrationManager, ActivityLogs, Settings } from './screens/OtherScreens.js';
+import { AIClients, MigrationManager, ActivityLogs, Settings } from './screens/OtherScreens.js';
+import { ProjectRouting } from './screens/ProjectRouting.js';
 import { NavIcon } from './components/NavIcon.js';
 
 const pages = [
@@ -36,7 +37,7 @@ export function App() {
     switch (page) {
       case 'Dashboard': content = <Dashboard data={data} navigate={setPage} />; break;
       case 'Workspaces': content = <Workspaces data={data} refresh={refresh} />; break;
-      case 'Routing': content = <ProjectRouting data={data} />; break;
+      case 'Routing': content = <ProjectRouting data={data} refresh={refresh} />; break;
       case 'Clients': content = <AIClients data={data} />; break;
       case 'Migration': content = <MigrationManager data={data} />; break;
       case 'Logs': content = <ActivityLogs data={data} />; break;

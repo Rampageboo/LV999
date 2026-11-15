@@ -86,6 +86,17 @@ async fn reauthorize_workspace(input: serde_json::Value, state: tauri::State<'_,
     }).await.map_err(|_| "Backend worker failed.".to_string())?
 }
 
+#[tauri::command]
+async fn page_route_request(method: String, input: serde_json::Value, state: tauri::State<'_, SharedBackend>) -> Result<serde_json::Value, String> {
+    if !matches!(method.as_str(), "browse_pages" | "inspect_page" | "save_project" | "resolve_project") {
+        return Err("Unsupported page/routing operation.".into());
+    }
+    let backend = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        backend.lock().map_err(|_| "Backend lock unavailable.")?.request(&method, input)
+    }).await.map_err(|_| "Backend worker failed.".to_string())?
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -97,7 +108,7 @@ fn main() {
             app.manage(Arc::new(Mutex::new(backend)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace])
+        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace, page_route_request])
         .build(tauri::generate_context!())
         .expect("LV999 desktop could not start")
         .run(|app, event| {

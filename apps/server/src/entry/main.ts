@@ -34,9 +34,18 @@ if (mode === 'management') {
       console.log(JSON.stringify(value));
       if (!value.ok) process.exitCode = 1;
     } else if (command === 'status') console.log(JSON.stringify(service.snapshot(), null, 2));
+    else if (command === 'projects') console.log(JSON.stringify(service.listProjects()));
+    else if (command === 'resolve') {
+      const value = await service.resolveProject({ ...(flag('--project-key') ? { project_key: flag('--project-key') } : { name: flag('--name') }) });
+      console.log(JSON.stringify(value)); if (!value.ok) process.exitCode = 1;
+    } else if (command === 'map') {
+      const value = await service.saveProject({ project_key: flag('--project-key'), name: flag('--name'), workspace_id: flag('--workspace-id'),
+        root_page_id: flag('--root-page-id'), expected_revision: Number(flag('--expected-revision') ?? NaN) });
+      console.log(JSON.stringify(value)); if (!value.ok) process.exitCode = 1;
+    }
     else throw new Error('INVALID_INPUT');
   } catch {
-    console.error(JSON.stringify(result(null, null, 'INVALID_INPUT', ['Use status, register --workspace-id <id> --label <label> --test, or verify --workspace-id <id>.'])));
+    console.error(JSON.stringify(result(null, null, 'INVALID_INPUT', ['Use status, register, verify, projects, resolve or map. See docs/setup-windows.md for required arguments.'])));
     process.exitCode = 1;
   } finally { store.close(); }
 } else { console.error('Unknown entry mode. Use mcp, management or cli.'); store.close(); process.exitCode = 1; }

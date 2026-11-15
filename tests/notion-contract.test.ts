@@ -44,3 +44,14 @@ it('fails closed when workspace identity is unavailable', async () => {
   const adapter = new OfficialNotionAdapter(randomUUID(), async () => Response.json({ object: 'user', type: 'bot', bot: {}, id: randomUUID() }));
   await expect(adapter.identity()).rejects.toMatchObject({ code: 'IDENTITY_UNAVAILABLE' });
 });
+it('filters accessible-page search through the official SDK and retrieves only the exact requested page', async () => {
+  const id = randomUUID(), requests: Request[] = [];
+  const adapter = new OfficialNotionAdapter(randomUUID(), async (input, init) => {
+    const request = new Request(input, init); requests.push(request);
+    return Response.json(request.method === 'GET' ? { object: 'page', id } : { results: [], has_more: false, next_cursor: null });
+  });
+  await adapter.search('Root', 'next-batch', true); await adapter.page(id);
+  expect(await requests[0].json()).toEqual({ query: 'Root', page_size: 50, start_cursor: 'next-batch', filter: { property: 'object', value: 'page' } });
+  expect(requests[1].url).toBe(`https://api.notion.com/v1/pages/${id}`); expect(requests[1].method).toBe('GET');
+  expect(requests.every(request => request.headers.get('Notion-Version') === NOTION_VERSION)).toBe(true);
+});

@@ -16,3 +16,26 @@
 .connection-target span { display: block; margin-top: 6px; }
 .form-error { border-left: 3px solid #c25443; padding: 12px; line-height: 1.6; background: var(--banner); overflow-wrap: anywhere; }
 @media (max-width: 650px) { .connection-dialog { padding: 20px; } }
+.page-browser { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 14px; min-width: 0; }
+h3 { font-size: 17px; line-height: 1.4; margin: 12px 0; }
+.page-browser .hint { margin: 8px 0 16px; }
+.page-search { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.page-search label { flex: 1 1 230px; display: flex; flex-direction: column; gap: 7px; font-weight: 600; }
+.page-search input, .form-field select { min-width: 0; width: 100%; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; min-height: 40px; padding: 9px 12px; }
+.page-search input:focus-visible, select:focus-visible { outline: 3px solid #8d85eb; outline-offset: 2px; }
+.page-results { list-style: none; padding: 0; margin: 12px 0; }
+.page-results li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 0; border-top: 1px solid var(--border); }
+.page-results li > div { min-width: 0; overflow-wrap: anywhere; }
+.page-results span, .page-results small, .project-route dd small { display: block; margin-top: 5px; color: var(--muted); }
+.page-results li > button { flex-shrink: 0; }
+.page-inspection, .route-target { background: var(--banner); border-radius: 7px; padding: 16px; margin: 20px 0; overflow-wrap: anywhere; }
+.page-inspection dl { margin-bottom: 16px; }
+.routing-dialog { width: min(850px, calc(100vw - 32px)); }
+.route-fields, .browser-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.route-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+.route-workspace { grid-column: 1 / -1; }
+.route-filter { max-width: 480px; margin: 24px 0; }
+.project-route, .name-resolution { border-top: 1px solid var(--border); padding: 20px 0; }
+@media(max-width:650px) { .route-fields { grid-template-columns: minmax(0,1fr); } .page-results li { align-items: flex-start; flex-wrap: wrap; } .page-inspection dl { grid-template-columns: minmax(0,1fr); } }
+.routing-dialog .dialog-actions { position: sticky; bottom: -28px; background: var(--surface); border-top: 1px solid var(--border); padding: 14px 0; margin-bottom: -28px; z-index: 1; }
+@media(max-width:650px) { .routing-dialog .dialog-actions { bottom: -20px; margin-bottom: -20px; } }

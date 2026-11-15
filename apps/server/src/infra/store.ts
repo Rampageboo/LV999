@@ -1,17 +1,22 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { WorkspaceInput, type Activity, type WorkspaceConfig, type WorkspaceView } from '../../../../packages/contracts/src/index.js';
+import { WorkspaceInput, type Activity, type WorkspaceConfig, type WorkspaceView, type ProjectRoute, type SaveProjectRequest, type AccessiblePage } from '../../../../packages/contracts/src/index.js';
+export const projectNameLookup = (name: string) => name.normalize('NFKC').trim().toLowerCase();
 
 export class Store {
   readonly db: DatabaseSync;
   constructor(readonly directory: string) {
     mkdirSync(directory, { recursive: true });
     this.db = new DatabaseSync(join(directory, 'registry.db'));
-    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
+    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;
       CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, config TEXT NOT NULL, verification TEXT);
       CREATE TABLE IF NOT EXISTS activity (seq INTEGER PRIMARY KEY, event TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS connection_locks (id TEXT PRIMARY KEY, owner TEXT NOT NULL, expires INTEGER NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS connection_locks (id TEXT PRIMARY KEY, owner TEXT NOT NULL, expires INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS project_routes (
+        project_key TEXT PRIMARY KEY, name_lookup TEXT NOT NULL, workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        revision INTEGER NOT NULL, route TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS project_routes_name ON project_routes(name_lookup);`);
   }
   add(input: WorkspaceConfig) {
     const config = WorkspaceInput.parse(input);
@@ -52,6 +57,25 @@ export class Store {
       }
       this.log({ level: 'info', action: replace ? 'Workspace reauthorized' : 'Workspace connected', workspace_id: config.id, code: 'OK' });
       this.db.exec('COMMIT');
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+  projects(): ProjectRoute[] {
+    return (this.db.prepare('SELECT route FROM project_routes ORDER BY project_key').all() as { route: string }[]).map(row => JSON.parse(row.route));
+  }
+  saveProject(input: SaveProjectRequest, root: AccessiblePage): ProjectRoute | null {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.db.prepare('SELECT revision FROM project_routes WHERE project_key=?').get(input.project_key);
+      if (Number(current?.revision ?? 0) !== input.expected_revision) { this.db.exec('ROLLBACK'); return null; }
+      const now = new Date().toISOString();
+      const route: ProjectRoute = { project_key: input.project_key, name: input.name, workspace_id: input.workspace_id,
+        root_page: root, revision: input.expected_revision + 1, updated_at: now, validated_at: now };
+      this.db.prepare(`INSERT INTO project_routes(project_key,name_lookup,workspace_id,revision,route) VALUES (?,?,?,?,?)
+        ON CONFLICT(project_key) DO UPDATE SET name_lookup=excluded.name_lookup,workspace_id=excluded.workspace_id,revision=excluded.revision,route=excluded.route`)
+        .run(input.project_key, projectNameLookup(input.name), input.workspace_id, route.revision, JSON.stringify(route));
+      this.log({ level: 'info', action: `Project route ${input.project_key} saved`, workspace_id: input.workspace_id, code: 'OK' });
+      this.db.exec('COMMIT');
+      return route;
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
   log(event: Omit<Activity, 'time'>) {

@@ -1,6 +1,6 @@
 # Windows bootstrap
 
-Milestone 1 is in progress. GUI test-workspace connection, verification and reauthorization are implemented; Notion content remains read-only. Two real test workspaces have not yet been created, so real acceptance is still pending. Do not use Vibecode or Honour. Closing the window stops its backend. Tray/background operation, autostart and single-instance recovery belong to M2.
+Milestone 1 is in progress. GUI test-workspace connection, page browsing and local project routing are implemented; Notion content remains read-only. Two real test workspaces have not yet been created, so real acceptance is still pending. Do not use Vibecode or Honour. Closing the window stops its backend. Tray/background operation, autostart and single-instance recovery belong to M2.
 
 ## Build and run
 
@@ -42,6 +42,31 @@ Real verification remains pending until the Owner prepares the workspaces. The n
 ```powershell
 npm run test:workspace-gui
 ```
+
+## Browse pages and map a project
+
+1. In Workspaces, choose **Browse pages** on one exact test connection. Search page titles, load more batches, or refresh. The list is a search index of accessible pages, not a full inventory. Duplicate results are merged by ID. Missing/partial objects are reported instead of silently described as complete.
+2. Choose **Inspect page** to verify a listed page, or paste a page ID / `https://www.notion.so/...` link into **Page link or ID**. No external URL is fetched. Inspection shows metadata and the exact workspace/page IDs; this does not load a full page tree or edit its content. A 404 means missing or not shared with this particular connection.
+3. In Routing, choose **Add mapping**, enter a stable project key and display name, select a workspace, inspect a page and choose **Use as project root**. Root pages must be active ordinary pages (top-level or child pages). Database records, archived/trashed pages and unsupported parent types are visible for diagnosis but cannot be chosen as roots.
+4. Review **Selected route target**, then **Save mapping**. The backend re-reads the exact page before committing local configuration. It does not create/move/edit Notion content. Selecting a different workspace clears the old root; page titles never substitute for IDs.
+5. Use **Edit mapping** to change the name or target under the same immutable key. A changed revision returns `ROUTE_CONFLICT`; cancel, refresh and reopen rather than overwriting the other editor. **Filter mappings** searches locally. **Check route** revalidates the saved workspace identity and root, while the list's Saved validation time remains historical.
+6. Distinct keys can share a project name, but **Resolve name** returns `AMBIGUOUS_TARGET` for duplicates without reading a credential. Resolve by exact key instead. A route is configuration, not content-write authorization or a migration finalization receipt.
+
+The read-only MCP tools `list_projects` and `resolve_project` expose the same backend. Developer CLI equivalents (substitute only local runtime values) are:
+
+```powershell
+npm run cli -- projects
+npm run cli -- resolve --project-key $testProjectKey
+npm run cli -- map --project-key $testProjectKey --name $testProjectName --workspace-id $testWorkspaceId --root-page-id $testRootPageId --expected-revision 0
+```
+
+Use the currently saved revision when editing; revision `0` creates a new key. Native routing verification uses the same isolated harness as Workspace tests, with simulated Notion HTTP and real local persistence/vault operations:
+
+```powershell
+npm run test:routing-gui
+```
+
+Real two-workspace route/permission acceptance is still pending. Do not put workspace, page or data-source IDs in public docs or fixtures. Route removal, disconnect, content CRUD, AI-client setup and full migration are not implemented by this slice.
 
 ## Developer fallback
 

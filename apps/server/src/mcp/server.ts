@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { APP_VERSION, WorkspaceRef, result } from '../../../../packages/contracts/src/index.js';
+import { APP_VERSION, WorkspaceRef, ResolveProjectInput, result } from '../../../../packages/contracts/src/index.js';
 import type { Service } from '../core/service.js';
 
 export function createMcpServer(service: Service) {
@@ -21,5 +21,11 @@ export function createMcpServer(service: Service) {
     description: 'Read a page in an identity-verified test workspace. 404 may mean missing or not shared.',
     inputSchema: WorkspaceRef.extend({ page_id: z.uuid() }),
   }, async ({ workspace_id, page_id }) => reply(await service.page(workspace_id, page_id)));
+  server.registerTool('list_projects', {
+    description: 'List local project mappings. Stored validation time is historical, not live connectivity evidence.', inputSchema: z.object({}).strict(),
+  }, async () => reply(service.listProjects()));
+  server.registerTool('resolve_project', {
+    description: 'Resolve one exact project key or unique name and live-check its workspace and root page. Ambiguous names are rejected.', inputSchema: ResolveProjectInput,
+  }, async input => reply(await service.resolveProject(input)));
   return server;
 }

@@ -8,8 +8,8 @@ import { createInterface } from 'node:readline';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 const folder = await mkdtemp(join(tmpdir(), 'lv999-m0-'));
-const env = { SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMP: process.env.TMP,
-  LOCALAPPDATA: folder, Path: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32') };
+const env = { SYSTEMROOT: process.env.SystemRoot, TEMP: process.env.TEMP, TMP: process.env.TMP,
+  LOCALAPPDATA: folder, PATH: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32') };
 let management;
 let client;
 try {
@@ -37,10 +37,14 @@ try {
   const transport = new StdioClientTransport({ command: exe, args: [script, 'mcp', '--data-dir', join(folder, 'mcp-data')], env, cwd: folder, stderr: 'pipe' });
   await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map(t => t.name).sort(), ['get_page', 'list_workspaces', 'search_workspace', 'verify_workspace']);
+  assert.deepEqual(tools.map(t => t.name).sort(), ['get_page', 'list_projects', 'list_workspaces', 'resolve_project', 'search_workspace', 'verify_workspace']);
   const response = await client.callTool({ name: 'list_workspaces', arguments: {} });
   assert.equal(JSON.parse(response.content[0].text).ok, true);
   assert.deepEqual(JSON.parse(response.content[0].text).data, []);
+  const projects = await client.callTool({ name: 'list_projects', arguments: {} });
+  assert.deepEqual(JSON.parse(projects.content[0].text).data, []);
+  const unknownRoute = await client.callTool({ name: 'resolve_project', arguments: { project_key: 'QA' } });
+  assert.equal(JSON.parse(unknownRoute.content[0].text).code, 'UNKNOWN_PROJECT');
   const rejected = await client.callTool({ name: 'verify_workspace', arguments: { workspace_id: 'invalid' } });
   assert.equal(rejected.isError, true);
   await client.close(); client = null;

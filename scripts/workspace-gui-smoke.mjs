@@ -11,10 +11,12 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import { fixtureId, fixtureToken } from '../tests/fixtures/workspace-identity.ts';
+import { runRoutingFlow } from './routing-gui-flow.mjs';
 
 const base = await mkdtemp(join(tmpdir(), 'lv999-workspace-test-'));
-const evidence = resolve(process.argv[3] ?? join(tmpdir(), 'lv999-workspace-qa'));
-const original = resolve(process.argv[2] ?? 'apps/desktop/src-tauri/target/release/lv999-desktop.exe');
+const positionalArgs = process.argv.slice(2).filter(arg => arg !== '--routing');
+const evidence = resolve(positionalArgs[1] ?? join(tmpdir(), process.argv.includes('--routing') ? 'lv999-routing-qa' : 'lv999-workspace-qa'));
+const original = resolve(positionalArgs[0] ?? 'apps/desktop/src-tauri/target/release/lv999-desktop.exe');
 const runtime = join(base, 'app', 'runtime');
 const seed = randomUUID();
 const ids = ['alpha', 'beta', 'forbidden', 'production'].map(kind => fixtureId(seed, kind));
@@ -129,6 +131,13 @@ try {
   assert.equal((await state()).workspaces[0].read_access.sampled_objects, 2);
   console.log('PASS: native form confirmation, masked input, cancel cleanup, API identity/read probe and real vault write/readback');
 
+  if (process.argv.includes('--routing')) {
+    dialog = await open(); await submit(dialog, 'beta', ''); await connected(dialog, 'Test Beta');
+    await runRoutingFlow({ getPage: () => page, getBrowser: () => browser, state, seed, base, evidence, stop, start });
+    await noLeak(); assert.deepEqual(errors, []);
+    console.log(`Routing evidence (simulated Notion HTTP, real native/vault/storage): ${evidence}`);
+  } else {
+
   for (const [kind, expected] of [['unauthorized', 'AUTH_REQUIRED'], ['network', 'NETWORK_ERROR'], ['forbidden', 'FORBIDDEN'], ['production', 'TEST_WORKSPACE_ONLY'], ['alpha', 'WORKSPACE_EXISTS']]) {
     dialog = await open(); await submit(dialog, kind, '');
     await dialog.getByRole('alert').filter({ hasText: expected }).waitFor({ timeout: 30000 });
@@ -180,6 +189,7 @@ try {
   assert.deepEqual(errors, []);
   console.log('PASS: two isolated connections, empty search warning, token rotation, degraded/auth-required recovery, restart persistence, dark/narrow dialogs and no credential leakage');
   console.log(`Evidence (simulated Notion HTTP, real native/vault/storage): ${evidence}`);
+  }
 } finally {
   await stop();
   if (vault) {

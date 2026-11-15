@@ -7,7 +7,7 @@ export class DomainError extends Error {
 export type Identity = { workspace_id: string; workspace_name: string; bot_id: string };
 export interface NotionAdapter {
   identity(): Promise<Identity>;
-  search(query: string, cursor?: string): Promise<unknown>;
+  search(query: string, cursor?: string, pagesOnly?: boolean): Promise<unknown>;
   page(id: string): Promise<unknown>;
 }
 // Only explicitly allowed read endpoints are exposed. No arbitrary URLs or raw request method.
@@ -23,7 +23,10 @@ export class OfficialNotionAdapter implements NotionAdapter {
       throw new DomainError('IDENTITY_UNAVAILABLE', 'The token did not expose a verifiable workspace identity.');
     return { workspace_id: me.bot.workspace_id.toLowerCase(), workspace_name: me.bot.workspace_name, bot_id: me.id };
   }
-  search(query: string, cursor?: string) { return this.client.search({ query, page_size: 50, start_cursor: cursor }); }
+  search(query: string, cursor?: string, pagesOnly = false) {
+    return this.client.search({ query, page_size: 50, start_cursor: cursor,
+      ...(pagesOnly ? { filter: { property: 'object' as const, value: 'page' as const } } : {}) });
+  }
   page(id: string) { return this.client.pages.retrieve({ page_id: id }); }
 }
 export function safeError(error: unknown): DomainError {

@@ -7,8 +7,8 @@ Tokens: accent `#4338b8`, text `#17171f`, secondary `#646575`, sidebar `#f3f4f8`
 | Page | Current behavior |
 |---|---|
 | Dashboard | Running process, runtime path/version, vault probe, registered versus verified count, native WebView2 IPC check, real activity |
-| Workspaces | Connect/verify/reauthorize test workspaces; actual ID/name and timestamped read-access evidence; credentials stored by the backend in Windows Credential Manager |
-| Routing | Empty registry and disabled mapping action until M1 |
+| Workspaces | Connect/verify/reauthorize test workspaces; page-title search, pagination, refresh and exact page inspection; credentials stored by the backend in Windows Credential Manager |
+| Routing | Filter/add/edit exact key→workspace→root mappings, inspect/select roots, warn on duplicate names, live-check routes and reject ambiguous name resolution |
 | Clients | Explicit Not tested; no claim from file presence; configuration disabled until M1 |
 | Migration | No jobs; discovery/execution disabled until M3/M4 |
 | Logs | Backend-generated safe events, no raw Notion responses or tokens |
@@ -20,4 +20,8 @@ Concept brief: “LV999 Windows console, complete dashboard with seven named nav
 
 The Workspace modal extends this established system without a redesign. It uses an uncontrolled password field, an optional display name and mandatory test-workspace confirmation. Submission clears the password field immediately; cancel/escape discards it. Native modal focus stays inside the dialog. During verification/saving, controls and dismiss actions are disabled to avoid an ambiguous cancellation after persistence has started. Failures show fixed error messages and require re-entry of the token. Reauthorization displays the existing immutable target ID; no ID is requested for a new connection.
 
-Connected now requires identity plus a successful read-only search. Zero returned objects gets a sharing/indexing warning. The count is a first-batch sample of at most 50 objects, not a complete inventory or proof that a particular root page is shared. Root browsing, disconnect, routing and client configuration remain later work.
+Connected now requires identity plus a successful read-only search. Zero returned objects gets a sharing/indexing warning. The count is a first-batch sample of at most 50 objects, not a complete inventory or proof that a particular root page is shared. Disconnect, CRUD and client configuration remain later work.
+
+The shared page browser loads one search batch at a time, deduplicates IDs when loading more, clears old results on a new query, and ignores responses from a previous workspace. Exact link/ID lookup is available when indexing omits a newly shared page. Inspecting shows ID, canonical Notion URL, parent type and edit time; it is not a page-content editor. Metadata is rendered as text, with no external media or HTML execution.
+
+The route editor uses an immutable key on edits, explicit workspace selection and an inspected root. Switching workspaces clears the selected root. Root eligibility is checked in both UI and backend; the backend retrieves the page again on save. The editor's actions remain visible while its long page list scrolls. Saved validation is dated configuration evidence; Check route displays a separate fresh result. Duplicate names are allowed under distinct keys but produce warnings and cannot resolve by name. Revision conflicts retain the current saved mapping and require reopening the editor. Removing mappings is outside this slice.

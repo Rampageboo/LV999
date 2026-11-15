@@ -5,7 +5,7 @@ import type { Service } from '../core/service.js';
 
 const Request = z.object({
   id: z.number().int(),
-  method: z.enum(['snapshot', 'verify_workspace', 'connect_workspace', 'reauthorize_workspace']),
+  method: z.enum(['snapshot', 'verify_workspace', 'connect_workspace', 'reauthorize_workspace', 'browse_pages', 'inspect_page', 'save_project', 'resolve_project']),
   params: z.unknown().optional(),
 }).strict();
 
@@ -23,6 +23,10 @@ export async function runManagement(service: Service) {
         case 'verify_workspace': value = await service.verify(WorkspaceRef.parse(request.params).workspace_id); break;
         case 'connect_workspace': value = await service.connectWorkspace(request.params); break;
         case 'reauthorize_workspace': value = await service.reauthorizeWorkspace(request.params); break;
+        case 'browse_pages': value = await service.browsePages(request.params); break;
+        case 'inspect_page': value = await service.inspectPage(request.params); break;
+        case 'save_project': value = await service.saveProject(request.params); break;
+        case 'resolve_project': value = await service.resolveProject(request.params); break;
       }
       process.stdout.write(JSON.stringify({ id, result: value }) + '\n');
     } catch {
