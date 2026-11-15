@@ -109,6 +109,16 @@ it('explicit refresh rotates the atomic vault bundle and preserves exact Workspa
   expect(f.token.mock.calls.at(-1)![2]).toEqual({refresh_token:a.value.refresh_token});
   expect(reply.data!.auth_kind).toBe('oauth');
 });
+it('switches an existing Internal Connection to OAuth only after validating that same Workspace', async () => {
+  const f=await fixture(),a=f.grant(),id=a.value.identity.workspace_id,oldToken=randomUUID();
+  f.store.add({id,label:'Existing test connection',environment:'test'});f.secrets.set(id,oldToken);
+  f.store.verification(id,{auth_kind:'internal',status:'Connected'});
+  const url=await f.start({workspace_id:id});await f.callback(url.searchParams.get('state'),a.code);
+  await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));
+  expect(f.store.list()).toHaveLength(1);expect(f.store.list()[0]).toMatchObject({id,label:'Existing test connection',auth_kind:'oauth'});
+  expect(decodeCredential(f.secrets.get(id)!).oauth?.identity.workspace_id).toBe(id);
+  expect(f.service.chatOverview().data!.workspaces).toHaveLength(1);
+});
 it('refresh never pretends the old refresh token was restored after renewal and a local save failure', async () => {
   const f=await fixture(),a=f.grant(),url=await f.start();await f.callback(url.searchParams.get('state'),a.code);
   await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));

@@ -78,6 +78,8 @@ Start each authorization from LV999; a copied Developer portal URL without LV999
 
 **Reauthorize** on an OAuth Workspace enforces that exact target. **Refresh OAuth token** explicitly rotates its saved access/refresh pair and rechecks identity/read access; no automatic token-grant retry is performed. Revoked/unrefreshable credentials require Reauthorize. If remote refresh succeeded but local persistence is uncertain, reauthorize rather than retrying a possibly consumed refresh token. Access/refresh tokens and their authoritative identity evidence share one atomic vault blob; SQLite stores no secrets. A changed OAuth app setting does not replace existing Workspace credentials or erase the earlier per-client secret.
 
+For a Workspace already connected with an Internal Connection, choose **Switch to OAuth** on its card. The existing credential, display name and group history are retained until the same Workspace passes OAuth identity/read validation. This changes the connection method without creating a duplicate Workspace group.
+
 The current OAuth tests use scripted Notion responses and generated vault secrets. Real consent/token exchange, page access and two-Workspace isolation still require acceptance with the Owner's test spaces. [Notion's public connection guide](https://developers.notion.com/guides/connections-and-tokens/public-integrations/overview) explains the multi-Workspace scope; [authorization](https://developers.notion.com/guides/authorization/overview) describes state/code exchange and refresh.
 
 ## AI Clients

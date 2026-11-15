@@ -57,6 +57,7 @@ export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refres
       {w.message ? <p className="notice">{w.code}: {w.message}</p> : null}
       <div className="workspace-actions"><button onClick={() => void verify(w.id)} disabled={busy !== null}>{busy === w.id ? 'Checking…' : 'Verify connection'}</button>
         <button onClick={() => w.auth_kind === 'oauth' ? setOAuth({ workspace: w }) : openConnection(w)} disabled={busy !== null}>Reauthorize</button>
+        {w.auth_kind !== 'oauth' ? <button disabled={busy !== null} onClick={() => setOAuth({ workspace: w })}>Switch to OAuth</button> : null}
         {w.auth_kind === 'oauth' ? <button disabled={busy !== null} onClick={() => void renew(w.id)}>Refresh OAuth token</button> : null}
         <button onClick={() => openChat({ workspace_id: w.id })} disabled={busy !== null}>Open group chat</button>
         <button disabled={busy !== null || !data.capabilities.browse_pages} onClick={() => setBrowsing(browsing === w.id ? null : w.id)}>{browsing === w.id ? 'Hide pages' : 'Browse pages'}</button></div>
