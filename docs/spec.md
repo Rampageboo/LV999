@@ -634,3 +634,9 @@ unified-notion-mcp/
 - ChatGPT 自建 MCP 套餐/权限： https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt
 
 **声明：** 此文档是设计与实施规格；新增 Windows GUI 是**开发要求**，不是已经交付的功能。当前并未新建 Notion Workspace、开发/部署 GUI 或 MCP 服务器、迁移数据、验证外部客户端的真实运行状态。需要完成开发后逐项验收。
+
+## 13. 2026-11-16 产品补充：Workspace 群聊
+
+Owner 将 Agent Messenger 纳入 LV999。每个配置的 Workspace 都必须有群聊；Workspaces 页面有入口，另提供独立 Chats 页面，以 Project 组织并保留跨群组总览，不能只把聊天分散在项目内部。Project 主题使用相同的 Workspace 消息记录，路由变更不静默移动历史。
+
+本轮实现客户端检测/配置生成/隔离握手及持久化群聊基础。普通消息不自动启动 Agent，已读和任务完成分开。原生自动唤醒、会话 Bridge、Supervisor 和任务证据按后续阶段实现，不能因 MCP 握手成功就宣称这些已实现。详见 [适配规格](agent-messenger.md) 和各切片验收记录；前文未实现状态声明属于最初规格基线，不替代后续验收记录。

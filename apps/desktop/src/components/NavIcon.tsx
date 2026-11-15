@@ -3,6 +3,7 @@ const paths: Record<string, string> = {
   Workspaces: 'm12 3 10 5-10 5L2 8Zm-9 9 9 5 9-5M3 17l9 5 9-5',
   Routing: 'M12 6v5M5 18v-3l7-4 7 4v3M10 3h4v4h-4ZM3 18h4v4H3Zm14 0h4v4h-4Z',
   Clients: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 4a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
+  Chats: 'M21 12a8 8 0 0 1-8 8H7l-5 2 2-5v-5a8 8 0 0 1 8-8h1a8 8 0 0 1 8 8ZM8 10h8M8 14h5',
   Migration: 'M3 7h17m-4-4 4 4-4 4M21 17H4m4-4-4 4 4 4',
   Logs: 'M5 3h14v18H5ZM9 7h6M9 11h6M9 15h4',
   Settings: 'm10 3-1 3-3 1-3 3 2 2-1 3 3 3 3-1 2 2 3-1 1-3 3-1 1-3-2-2 1-3-3-3-3 1-2-2Zm5 9a3 3 0 1 1-6 0 3 3 0 0 1 6 0',

@@ -39,11 +39,42 @@ export type ProjectRoute = {
   project_key: string; name: string; workspace_id: string; root_page: AccessiblePage;
   revision: number; updated_at: string; validated_at: string;
 };
+export const ClientId = z.enum(['claude', 'codex']);
+export type ClientKind = z.infer<typeof ClientId>;
+export const ClientConfigInput = z.object({ client: ClientId, chat_workspace_ids: z.array(z.uuid().transform(id => id.toLowerCase())).max(100).default([]) }).strict();
+export const ClientTestInput = ClientConfigInput.extend({ kind: z.enum(['sdk', 'native']).default('native') });
+export type ClientView = {
+  id: ClientKind; name: string; status: 'Not tested' | 'Not installed' | 'Not configured' | 'Configured' | 'Degraded';
+  version: string | null; executable: string | null; config_path: string; config_state: 'Unknown' | 'Missing' | 'Matching' | 'Different' | 'Invalid';
+  detail: string; detected_at: string | null;
+  handshake: { kind: 'sdk' | 'native'; ok: boolean; checked_at: string; tool_count: number; detail: string } | null;
+};
+export type GeneratedConfig = { client: ClientKind; format: 'JSON' | 'TOML'; config_path: string; server_name: string; text: string; chat_workspace_ids: string[] };
+export const ChatActor = z.enum(['human', 'claude', 'codex']);
+export type ChatActorId = z.infer<typeof ChatActor>;
+export type ChatIdentity = { actor: ChatActorId; workspace_ids: string[] | 'owner' };
+export const ChatScopeInput = z.object({ workspace_id: z.uuid().transform(id => id.toLowerCase()).optional(), project_key: ProjectKey.optional(),
+  before_seq: z.number().int().positive().optional(), limit: z.number().int().min(1).max(100).default(50) }).strict()
+  .refine(value => Boolean(value.workspace_id || value.project_key));
+export const SendMessageInput = z.object({ workspace_id: z.uuid().transform(id => id.toLowerCase()), project_key: ProjectKey.optional(),
+  route_revision: z.number().int().positive().optional(), body: z.string().trim().min(1).max(8000),
+  reply_to_id: z.uuid().optional(), idempotency_key: z.uuid(), mentions: z.array(z.enum(['claude', 'codex'])).max(2).default([]) }).strict();
+export type SendMessageRequest = z.infer<typeof SendMessageInput>;
+export type ChatScope = z.infer<typeof ChatScopeInput>;
+export type ChatMessage = { id: string; seq: number; workspace_id: string; project_key: string | null; project_name: string | null;
+  sender_id: ChatActorId; body: string; reply_to_id: string | null; created_at: string;
+  receipts: { recipient_id: ChatActorId; read_at: string | null; read_source: string | null }[] };
+export type ChatOverview = {
+  workspaces: { workspace_id: string; label: string; message_count: number; unread: number; agent_unread: { claude: number; codex: number }; last_preview: string | null }[];
+  projects: { project_key: string; name: string; workspace_id: string | null; revision: number | null; message_count: number; unread: number }[];
+  total_unread: number; auto_wake: false;
+};
 export type ErrorCode = 'OK' | 'AUTH_REQUIRED' | 'FORBIDDEN' | 'NOT_FOUND_OR_NOT_SHARED' |
   'WORKSPACE_MISMATCH' | 'TEST_WORKSPACE_ONLY' | 'UNKNOWN_WORKSPACE' | 'RATE_LIMITED' |
   'NETWORK_ERROR' | 'VAULT_UNAVAILABLE' | 'IDENTITY_UNAVAILABLE' | 'INVALID_INPUT' | 'UNSUPPORTED' | 'INTERNAL_ERROR' |
   'WORKSPACE_EXISTS' | 'CONNECTION_BUSY' | 'LOCAL_SAVE_FAILED' | 'CREDENTIAL_STATE_UNCERTAIN' |
-  'INVALID_RESPONSE' | 'INELIGIBLE_ROOT' | 'UNKNOWN_PROJECT' | 'AMBIGUOUS_TARGET' | 'ROUTE_CONFLICT';
+  'INVALID_RESPONSE' | 'INELIGIBLE_ROOT' | 'UNKNOWN_PROJECT' | 'AMBIGUOUS_TARGET' | 'ROUTE_CONFLICT' |
+  'CHAT_ACCESS_DENIED' | 'MESSAGE_NOT_FOUND' | 'IDEMPOTENCY_CONFLICT' | 'CLIENT_UNAVAILABLE' | 'HANDSHAKE_FAILED';
 export type Result<T> = {
   ok: boolean; code: ErrorCode; workspace_id: string | null; project_key: string | null;
   resource_url: string | null; changed_objects: number; warnings: string[];
@@ -67,7 +98,7 @@ export type Snapshot = {
   app_version: string; app_id: string; captured_at: string;
   backend: { status: 'Running'; pid: number; node: string; executable: string; transport: 'Private stdio'; started_at: string };
   diagnostics: Diagnostic[]; workspaces: WorkspaceView[]; activity: Activity[];
-  projects: ProjectRoute[]; clients: { name: string; status: 'Not tested'; detail: string }[]; jobs: [];
+  projects: ProjectRoute[]; clients: ClientView[]; jobs: [];
   settings: { read_only: true; remote_enabled: false; autostart: false; api_version: string; data_dir: string; updater_configured: boolean };
-  capabilities: { connect_in_gui: boolean; browse_pages: boolean; routing: boolean; client_config: false; migration: false; content_write: false };
+  capabilities: { connect_in_gui: boolean; browse_pages: boolean; routing: boolean; client_config: boolean; group_chat: boolean; auto_wake: false; migration: false; content_write: false };
 };

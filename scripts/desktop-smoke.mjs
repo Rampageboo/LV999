@@ -58,7 +58,7 @@ try {
   await page.screenshot({ path: join(evidence, 'connect-workspace-dialog.png'), fullPage: true });
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.equal(await page.getByRole('dialog').count(), 0);
-  for (const name of ['Routing', 'Clients', 'Migration', 'Logs', 'Settings', 'Dashboard']) {
+  for (const name of ['Routing', 'Clients', 'Chats', 'Migration', 'Logs', 'Settings', 'Dashboard']) {
     await page.getByRole('navigation').getByRole('button', { name, exact: true }).click();
     await page.getByRole('heading', { name, exact: true, level: 1 }).waitFor();
     assert.equal(await page.getByRole('navigation').getByRole('button', { name, exact: true }).getAttribute('aria-current'), 'page');
@@ -75,7 +75,7 @@ try {
   await page.screenshot({ path: join(evidence, 'dashboard-narrow.png'), fullPage: true });
   await cdp.send('Emulation.clearDeviceMetricsOverride');
   assert.deepEqual(errors, [], 'Unexpected frontend console errors');
-  console.log('PASS: actual Tauri window, all seven pages, connection dialog/cancel, refresh, live backend/vault/WebView2, dark and narrow layout, clean console');
+  console.log('PASS: actual Tauri window, all eight pages, connection dialog/cancel, refresh, live backend/vault/WebView2, dark and narrow layout, clean console');
   // Kill only the backend whose PID was returned by this native app, to prove status does not stay green.
   process.kill(backendPid); backendPid = undefined;
   await page.getByRole('button', { name: 'Refresh status', exact: false }).click();

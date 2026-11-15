@@ -37,7 +37,7 @@ impl Backend {
         writeln!(self.input, "{request}").and_then(|_| self.input.flush())
             .map_err(|_| "Backend stopped. Restart LV999 to reconnect.".to_string())?;
         // Identity + read probe + vault round-trip + compensation each have bounded waits.
-        let timeout = if matches!(method, "connect_workspace" | "reauthorize_workspace") { 120 } else { 60 };
+        let timeout = if matches!(method, "connect_workspace" | "reauthorize_workspace" | "test_client") { 120 } else { 60 };
         let line = self.output.recv_timeout(Duration::from_secs(timeout))
             .map_err(|_| "Backend response timed out. The operation result is unknown; restart LV999 and refresh before retrying.".to_string())?;
         let response: serde_json::Value = serde_json::from_str(&line).map_err(|_| "Backend protocol error.")?;
@@ -97,6 +97,17 @@ async fn page_route_request(method: String, input: serde_json::Value, state: tau
     }).await.map_err(|_| "Backend worker failed.".to_string())?
 }
 
+#[tauri::command]
+async fn client_chat_request(method: String, input: serde_json::Value, state: tauri::State<'_, SharedBackend>) -> Result<serde_json::Value, String> {
+    if !matches!(method.as_str(), "detect_clients" | "generate_client_config" | "test_client" | "chat_overview" | "read_chat" | "send_chat") {
+        return Err("Unsupported client/chat operation.".into());
+    }
+    let backend = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        backend.lock().map_err(|_| "Backend lock unavailable.")?.request(&method, input)
+    }).await.map_err(|_| "Backend worker failed.".to_string())?
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -108,7 +119,7 @@ fn main() {
             app.manage(Arc::new(Mutex::new(backend)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace, page_route_request])
+        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace, page_route_request, client_chat_request])
         .build(tauri::generate_context!())
         .expect("LV999 desktop could not start")
         .run(|app, event| {

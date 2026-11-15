@@ -1,6 +1,6 @@
 # Windows bootstrap
 
-Milestone 1 is in progress. GUI test-workspace connection, page browsing and local project routing are implemented; Notion content remains read-only. Two real test workspaces have not yet been created, so real acceptance is still pending. Do not use Vibecode or Honour. Closing the window stops its backend. Tray/background operation, autostart and single-instance recovery belong to M2.
+Milestone 1 is in progress. Workspace connection, page browsing, routing, AI-client setup and local group chat are implemented; Notion content remains read-only. Two real test workspaces have not yet been created, so real acceptance is still pending. Do not use Vibecode or Honour. Closing the window stops its backend. Tray/background operation, autostart, automatic Agent wake and single-instance recovery remain later work.
 
 ## Build and run
 
@@ -66,7 +66,36 @@ Use the currently saved revision when editing; revision `0` creates a new key. N
 npm run test:routing-gui
 ```
 
-Real two-workspace route/permission acceptance is still pending. Do not put workspace, page or data-source IDs in public docs or fixtures. Route removal, disconnect, content CRUD, AI-client setup and full migration are not implemented by this slice.
+Real two-workspace route/permission acceptance is still pending. Do not put workspace, page or data-source IDs in public docs or fixtures. Route removal, disconnect, content CRUD and full migration remain unimplemented.
+
+## AI Clients
+
+1. Open Clients → **Detect clients**. CLI version/path and the known user configuration path are detected. Only the LV999 entry's state is returned; other server settings/secrets are not displayed. Project/managed scopes are outside this detector. Missing/different/invalid entries are never called Connected.
+2. Optionally select Workspace groups under **Chat access in the generated configuration**. The default is no chat access. These permissions cover the selected group's project topics and Messenger tools only; they do not narrow the existing read-only Notion tools.
+3. **Generate configuration**, then copy/merge only the LV999 entry into the indicated user file (`~/.claude.json` or `~/.codex/config.toml`, honoring configured client-home overrides). Preserve existing settings/servers. This action does not write the file; restart/reload the actual client after merging. Do not put these runtime-specific snippets in this public repo.
+4. **Test LV999 transport** runs SDK initialize/tool discovery/a local read call. **Test native client** runs the installed client against a temporary profile/working directory containing only LV999. Native Claude uses its MCP health check; native Codex uses App Server initialization/status discovery. Neither starts a model turn or alters an existing session. Isolated handshake success does not mean your saved user entry is installed/enabled in a live model session.
+
+Native versions/capability limits are recorded in [the matrix](messenger-capabilities.md). For repeatable developer checks:
+
+```powershell
+npm run test:clients-native
+```
+
+## Workspace group chats
+
+Every registered Workspace has a local group, even without a Project. Use **Open group chat** on Workspaces, **Open project chat** on a Routing row, or the standalone **Chats** page. All open the same stored conversation data. The conversation directory provides an All conversations overview, project topics and Workspace groups; messages are not copied/scattered across independent project stores.
+
+The chat uses ordinary message bubbles, participant names, a scrolling history and fixed input. Enter sends; Shift+Enter adds a newline. Use Reply for a quote, search loaded messages or load older history. Workspace groups include all their topics; project views also retain historical messages after reassignment. Sending a project message checks the current local route revision/Workspace. A changed target requires a new valid topic/route selection.
+
+You/Claude/Codex have independent receipts. Previews and handshake tests do not mark a message read. A full-body read API records only that reader; **Read via API is not proof of model understanding, Ack or task completion**. No Agent presence monitor is implemented. You may ask a configured Claude/Codex client to use `list_unread`, `read_message` and `send_message` in its allowed groups.
+
+Ordinary text, including typed `@Claude`/`@Codex`, only saves a message. Automatic wake is off; structured mentions are rejected until the native bridge phase. The reference Messenger's complete supervisor/recovery/task acceptance remains pending. See [the adapted scope](agent-messenger.md).
+
+Messages/receipts persist in the local registry; uninstall retains them. Don't paste credentials into chat. UI polling is local and visibility-scoped; there is no unauthenticated HTTP/WebSocket listener. Tests use scripted MCP agents and synthetic messages, not real model replies:
+
+```powershell
+npm run test:clients-chat-gui
+```
 
 ## Developer fallback
 

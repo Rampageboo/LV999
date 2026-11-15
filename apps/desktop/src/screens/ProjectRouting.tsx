@@ -3,8 +3,9 @@ import type { ProjectRoute, SaveProjectRequest, Snapshot } from '../../../../pac
 import { EmptyState } from '../components/Primitives.js';
 import { ProjectRouteDialog } from '../components/ProjectRouteDialog.js';
 import { resolveProject, saveProject } from '../ipc/backend.js';
+import type { ChatSelection } from './Chats.js';
 
-export function ProjectRouting({ data, refresh }: { data: Snapshot; refresh: () => Promise<void> }) {
+export function ProjectRouting({ data, refresh, openChat }: { data: Snapshot; refresh: () => Promise<void>; openChat: (selection: ChatSelection) => void }) {
   const [filter, setFilter] = useState('');
   const [dialog, setDialog] = useState<{ route?: ProjectRoute } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,7 +51,7 @@ export function ProjectRouting({ data, refresh }: { data: Snapshot; refresh: () 
           <dt>Root page</dt><dd>{route.root_page.title}<small className="mono">{route.root_page.id}</small></dd>
           <dt>Saved validation</dt><dd>{new Date(route.validated_at).toLocaleString()}</dd></dl>
         {sameName.length ? <p className="notice">Name also used by {sameName.map(other => other.project_key).join(', ')}. Name-based resolution is ambiguous; use a key.</p> : null}
-        <div className="workspace-actions"><button disabled={busy} onClick={() => open(route)}>Edit mapping</button><button disabled={busy} onClick={() => void resolve(route.project_key)}>Check route</button></div>
+        <div className="workspace-actions"><button disabled={busy} onClick={() => open(route)}>Edit mapping</button><button disabled={busy} onClick={() => void resolve(route.project_key)}>Check route</button><button disabled={busy} onClick={() => openChat({ project_key: route.project_key })}>Open project chat</button></div>
       </section>;
     })}</div> : <EmptyState title={data.projects.length ? 'No matching mappings' : 'No project routes configured'}>Add an exact project key, workspace and inspected root page.</EmptyState>}
     <section className="name-resolution"><h2>Resolve a project name</h2><p>Names must match exactly and be unique. Duplicate names are rejected before reading any workspace.</p>

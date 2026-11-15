@@ -7,12 +7,27 @@ import { DomainError, OfficialNotionAdapter, safeError, type NotionAdapter, type
 import { Store, projectNameLookup } from '../infra/store.js';
 import { pageBatch, pageMetadata, pageReference } from '../notion/page-metadata.js';
 import type { Vault } from '../infra/vault.js';
+import { ClientManager } from '../management/clients.js';
+import { MessageHub } from '../messenger/hub.js';
+import type { ChatIdentity } from '../../../../packages/contracts/src/index.js';
 
 export class Service {
   readonly started = new Date().toISOString();
   private vaultReady = false;
+  readonly clients: ClientManager;
+  readonly messages: MessageHub;
   constructor(readonly store: Store, private vault: Vault,
-    private makeAdapter: (token: string) => NotionAdapter = token => new OfficialNotionAdapter(token)) {}
+    private makeAdapter: (token: string) => NotionAdapter = token => new OfficialNotionAdapter(token),
+    local?: { clients?: ClientManager }) {
+    this.clients = local?.clients ?? new ClientManager(store.directory);
+    this.messages = new MessageHub(store);
+  }
+  detectClients() { return this.clients.detect(); }
+  generateClientConfig(input: unknown) { return this.clients.generate(input); }
+  testClient(input: unknown) { return this.clients.test(input); }
+  chatOverview() { return this.messages.overview({ actor: 'human', workspace_ids: 'owner' }); }
+  readChat(input: unknown) { return this.messages.read({ actor: 'human', workspace_ids: 'owner' }, input); }
+  sendChat(input: unknown) { return this.messages.send({ actor: 'human', workspace_ids: 'owner' }, input); }
   async initialize() {
     this.vaultReady = await this.vault.probe();
     this.store.log({ level: 'info', action: 'Backend started', workspace_id: null, code: 'OK' });
@@ -243,10 +258,10 @@ export class Service {
         { key: 'transport', label: 'Management transport', status: 'pass', detail: 'Private process pipes · no listening port' },
       ],
       workspaces, activity: this.store.activity(), projects: this.store.projects(),
-      clients: ['Claude Code', 'Codex'].map(name => ({ name, status: 'Not tested', detail: 'Client configuration and live handshake arrive in Milestone 1.' })),
+      clients: this.clients.snapshot(),
       jobs: [], settings: { read_only: true, remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
         data_dir: this.store.directory, updater_configured: false },
-      capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: false, migration: false, content_write: false },
+      capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: true, group_chat: true, auto_wake: false, migration: false, content_write: false },
     };
   }
 }

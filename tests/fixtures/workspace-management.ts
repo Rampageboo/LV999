@@ -8,6 +8,9 @@ import { runManagement } from '../../apps/server/src/management/protocol.js';
 import { fixtureId } from './workspace-identity.js';
 import { createMcpServer } from '../../apps/server/src/mcp/server.js';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { ClientManager } from '../../apps/server/src/management/clients.js';
+import { join } from 'node:path';
+import { ChatActor, type ChatIdentity } from '../../packages/contracts/src/index.js';
 
 const directory = process.env.LV999_QA_DIRECTORY;
 const seed = process.env.LV999_QA_SEED;
@@ -57,10 +60,14 @@ const service = new Service(store, new WindowsVault(), token => {
     throw new Error('Unexpected Notion endpoint in GUI test.');
   };
   return new OfficialNotionAdapter(token, fetchMock);
-});
+}, { clients: new ClientManager(directory, { home: directory, codexHome: join(directory, 'client-profile'), claudeConfig: join(directory, 'claude-profile.json'),
+  transportEnv: { LV999_QA_DIRECTORY: directory, LV999_QA_SEED: seed } }) });
 await service.initialize();
 if (process.argv[2] === 'mcp') {
-  const server = createMcpServer(service);
+  const args = process.argv.slice(2);
+  const actor = ChatActor.safeParse(args[args.indexOf('--client') + 1]);
+  const identity: ChatIdentity | undefined = actor.success && actor.data !== 'human' ? { actor: actor.data, workspace_ids: args.flatMap((arg, index) => arg === '--chat-workspace' ? [args[index + 1]] : []) } : undefined;
+  const server = createMcpServer(service, identity);
   await server.connect(new StdioServerTransport());
   process.stdin.once('end', () => { void server.close().finally(() => store.close()); });
 } else { await runManagement(service); store.close(); }

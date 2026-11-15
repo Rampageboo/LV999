@@ -9,7 +9,8 @@ Tokens: accent `#4338b8`, text `#17171f`, secondary `#646575`, sidebar `#f3f4f8`
 | Dashboard | Running process, runtime path/version, vault probe, registered versus verified count, native WebView2 IPC check, real activity |
 | Workspaces | Connect/verify/reauthorize test workspaces; page-title search, pagination, refresh and exact page inspection; credentials stored by the backend in Windows Credential Manager |
 | Routing | Filter/add/edit exact key→workspace→root mappings, inspect/select roots, warn on duplicate names, live-check routes and reject ambiguous name resolution |
-| Clients | Explicit Not tested; no claim from file presence; configuration disabled until M1 |
+| Clients | User-scope configuration/version detection, credential-free snippets and separate SDK/native isolated handshake evidence; no automatic global-file overwrite |
+| Chats | Familiar group-chat layout: project/Workspace conversation directory, message bubbles, participant names/avatars, compact read hints and a composer fixed below the scrolling timeline |
 | Migration | No jobs; discovery/execution disabled until M3/M4 |
 | Logs | Backend-generated safe events, no raw Notion responses or tokens |
 | Settings | Actual identity/data/runtime/API configuration; autostart and remote access off; later settings disabled |
@@ -25,3 +26,7 @@ Connected now requires identity plus a successful read-only search. Zero returne
 The shared page browser loads one search batch at a time, deduplicates IDs when loading more, clears old results on a new query, and ignores responses from a previous workspace. Exact link/ID lookup is available when indexing omits a newly shared page. Inspecting shows ID, canonical Notion URL, parent type and edit time; it is not a page-content editor. Metadata is rendered as text, with no external media or HTML execution.
 
 The route editor uses an immutable key on edits, explicit workspace selection and an inspected root. Switching workspaces clears the selected root. Root eligibility is checked in both UI and backend; the backend retrieves the page again on save. The editor's actions remain visible while its long page list scrolls. Saved validation is dated configuration evidence; Check route displays a separate fresh result. Duplicate names are allowed under distinct keys but produce warnings and cannot resolve by name. Revision conflicts retain the current saved mapping and require reopening the editor. Removing mappings is outside this slice.
+
+The Owner requested an ordinary chat interface. Workspace and Routing shortcuts navigate to this same Chats screen; they do not create separate message copies. All conversations remains a visible overview, with projects first and every Workspace group listed even when it has no projects/messages. Group history and project filtering use the same records. Configuration, CLI paths and handshake diagnostics stay on Clients. Chat shows only compact participant/time/read information; its `@ wake off` hint is honest about the absent automatic bridge.
+
+The composer supports Enter to send and Shift+Enter for a newline. Reply previews are inline; messages from You align right and agent messages left. The timeline scrolls independently while the input stays visible. Unread previews do not mark agents read. Human full-body retrieval records only a human API receipt; receipt details do not imply model/task completion. Clipboard denial falls back to selecting generated configuration text.

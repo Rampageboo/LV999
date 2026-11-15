@@ -4,7 +4,8 @@ import { connectWorkspace, reauthorizeWorkspace, verifyWorkspace } from '../ipc/
 import { EmptyState, Status } from '../components/Primitives.js';
 import { WorkspaceConnectionDialog } from '../components/WorkspaceConnectionDialog.js';
 import { PageBrowser } from '../components/PageBrowser.js';
-export function Workspaces({ data, refresh }: { data: Snapshot; refresh: () => Promise<void> }) {
+import type { ChatSelection } from './Chats.js';
+export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refresh: () => Promise<void>; openChat: (selection: ChatSelection) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -48,6 +49,7 @@ export function Workspaces({ data, refresh }: { data: Snapshot; refresh: () => P
       {w.message ? <p className="notice">{w.code}: {w.message}</p> : null}
       <div className="workspace-actions"><button onClick={() => void verify(w.id)} disabled={busy !== null}>{busy === w.id ? 'Checking…' : 'Verify connection'}</button>
         <button onClick={() => openConnection(w)} disabled={busy !== null}>Reauthorize</button>
+        <button onClick={() => openChat({ workspace_id: w.id })} disabled={busy !== null}>Open group chat</button>
         <button disabled={busy !== null || !data.capabilities.browse_pages} onClick={() => setBrowsing(browsing === w.id ? null : w.id)}>{browsing === w.id ? 'Hide pages' : 'Browse pages'}</button></div>
       {browsing === w.id ? <PageBrowser key={w.id} workspaceId={w.id} onStateChange={refresh} /> : null}
     </section>)}</div> : <EmptyState title="No test workspaces configured">Create a test workspace and its Internal Connection in Notion, then select Connect workspace. You do not need to enter a Workspace ID. Vibecode and Honour remain blocked.</EmptyState>}

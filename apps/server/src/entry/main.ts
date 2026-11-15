@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
-import { WorkspaceInput, WorkspaceRef, result } from '../../../../packages/contracts/src/index.js';
+import { WorkspaceInput, WorkspaceRef, ChatActor, result, type ChatIdentity } from '../../../../packages/contracts/src/index.js';
 import { Service } from '../core/service.js';
 import { Store } from '../infra/store.js';
 import { WindowsVault } from '../infra/vault.js';
@@ -19,7 +19,10 @@ if (mode === 'management') {
   await runManagement(service);
   store.close();
 } else if (mode === 'mcp') {
-  const server = createMcpServer(service);
+  const actor = ChatActor.safeParse(flag('--client'));
+  const workspaceIds = args.flatMap((arg, index) => arg === '--chat-workspace' ? [args[index + 1]?.toLowerCase()] : []).filter(Boolean) as string[];
+  const identity: ChatIdentity | undefined = actor.success && actor.data !== 'human' ? { actor: actor.data, workspace_ids: workspaceIds } : undefined;
+  const server = createMcpServer(service, identity);
   await server.connect(new StdioServerTransport());
   process.stdin.once('end', () => { void server.close().finally(() => store.close()); });
 } else if (mode === 'cli') {
