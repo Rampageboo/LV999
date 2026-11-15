@@ -24,6 +24,14 @@ jobs:
       - run: npm run check:public
       - run: npm test
       - run: npm run build:bundle
+      - name: Inspect runner vault availability
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          $lvProbeTimer = [Diagnostics.Stopwatch]::StartNew()
+          '{"operation":"probe"}' | & "$env:SystemRoot/System32/WindowsPowerShell/v1.0/powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/credential-vault.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Credential probe process failed' }
+          Write-Output "Vault probe duration: $($lvProbeTimer.Elapsed.TotalSeconds) seconds"
       - run: npm run test:smoke
       - run: node scripts/tauri.mjs build --bundles nsis
       - name: Stage Windows preview

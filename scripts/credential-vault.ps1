@@ -50,7 +50,7 @@ try {
     $found = [LV999Vault]::Read('com.rampageboo.lv999/vault-probe', 1, 0, [ref]$probePtr)
     $vaultError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
     if ($found) { [LV999Vault]::CredFree($probePtr) }
-    @{ok=($found -or $vaultError -eq 1168)} | ConvertTo-Json -Compress
+    @{ok=($found -or $vaultError -eq 1168); native_error=$vaultError} | ConvertTo-Json -Compress
     exit 0
   }
   if ($request.operation -notin @('read','write','remove') -or $request.target -notmatch '^com\.rampageboo\.lv999/(notion|oauth-client)/[0-9a-f-]{36}$') { throw 'Invalid operation' }
