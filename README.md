@@ -2,7 +2,7 @@
 
 Windows 上统一管理多个 Notion Workspace 的本地工具：一个 MCP 后端为 Claude Code 和 Codex 提供跨 Workspace 的读写与项目路由，一个 Tauri 桌面界面负责连接授权、项目映射、客户端配置、迁移预览与日志。
 
-> 状态：Milestone 1 开发中。Workspace OAuth、页面浏览、Project Routing、客户端配置与握手、群聊选定 @ 唤醒和自建会话已接入。Windows CI 已通过 109 项测试、构建安装包和便携版，便携版已在本机打开。Notion 内容仍只读；真实 OAuth/双 Workspace、Claude 登录后的唤醒、独立无 Node 环境及其余 CRUD 仍待验收或实现。
+> 状态：Milestone 1 开发中。两个测试 Workspace 已完成真实 OAuth、身份/搜索/页面读取及跨空间拒绝验证，页面浏览和群聊总览已实测。Windows CI 已通过 113 项测试，最终便携版已在本机打开。Notion 内容仍只读；真实路由变更、token 刷新/撤销、Claude 模型验收、独立无 Node 环境及其余 CRUD 仍待验证或实现。
 
 - 规格：[docs/spec.md](docs/spec.md)
 - 起步计划：[docs/plans/2026-11-16-bootstrap.md](docs/plans/2026-11-16-bootstrap.md)
@@ -16,6 +16,7 @@ Windows 上统一管理多个 Notion Workspace 的本地工具：一个 MCP 后�
 - 群聊与 Messenger 范围：[docs/agent-messenger.md](docs/agent-messenger.md)
 - 唤醒与 OAuth 进度及构建阻塞：[docs/qa/2026-11-16-milestone-1-wake-oauth.md](docs/qa/2026-11-16-milestone-1-wake-oauth.md)
 - Windows CI 构建与原生启动：[docs/qa/2026-11-16-windows-ci-oauth.md](docs/qa/2026-11-16-windows-ci-oauth.md)
+- 真实 OAuth 与双测试空间只读验收：[docs/qa/2026-11-19-real-oauth.md](docs/qa/2026-11-19-real-oauth.md)
 
 开发：`npm ci` → `npm run desktop`。构建：`npm run package:desktop`。前端单独运行时会明确显示后端不可用；实际功能通过 Tauri 原生 IPC 连接随包 Node。
 

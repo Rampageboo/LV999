@@ -1,6 +1,6 @@
 # Windows bootstrap
 
-Milestone 1 is in progress. Source includes Workspace OAuth, page browsing/routing, AI-client setup, group chat and explicit @ wake/session binding; Notion content remains read-only. The Owner reports creating test Workspaces, but their real OAuth authorization/acceptance remains pending. Do not use Vibecode or Honour. Local compilation remains blocked by Smart App Control's compiler-DLL policy; an authorized Windows CI build has now passed 109 tests, produced installer/portable artifacts and been launched successfully on this host. Closing the new host pauses enabled bindings and stops its backend. Tray/background operation, autostart and full single-instance recovery remain later work. See [CI/launch evidence](qa/2026-11-16-windows-ci-oauth.md).
+Milestone 1 is in progress. Source includes Workspace OAuth, page browsing/routing, AI-client setup, group chat and explicit @ wake/session binding; Notion content remains read-only. The two test Workspaces have now passed real OAuth, identity/search/page-read and cross-Workspace denial checks. Do not use Vibecode or Honour. Local compilation remains blocked by Smart App Control's compiler-DLL policy; the authorized final Windows CI build passed 113 tests and produced verified installer/portable artifacts. The portable preview was reopened with both OAuth connections preserved. Closing the host pauses enabled bindings and stops its backend. Tray/background operation, autostart and full single-instance recovery remain later work. See [live acceptance](qa/2026-11-19-real-oauth.md).
 
 ## Build and run
 
@@ -80,7 +80,7 @@ Start each authorization from LV999; a copied Developer portal URL without LV999
 
 For a Workspace already connected with an Internal Connection, choose **Switch to OAuth** on its card. The existing credential, display name and group history are retained until the same Workspace passes OAuth identity/read validation. This changes the connection method without creating a duplicate Workspace group.
 
-The current OAuth tests use scripted Notion responses and generated vault secrets. Real consent/token exchange, page access and two-Workspace isolation still require acceptance with the Owner's test spaces. [Notion's public connection guide](https://developers.notion.com/guides/connections-and-tokens/public-integrations/overview) explains the multi-Workspace scope; [authorization](https://developers.notion.com/guides/authorization/overview) describes state/code exchange and refresh.
+Automated OAuth tests use scripted responses and generated vault secrets. Separate real consent/token exchange, page access and two-Workspace denial checks passed with the Owner's test spaces on 2026-11-19; real refresh/revocation remains a separate gate. [Notion's public connection guide](https://developers.notion.com/guides/connections-and-tokens/public-integrations/overview) explains the multi-Workspace scope; [authorization](https://developers.notion.com/guides/authorization/overview) describes state/code exchange and refresh.
 
 ## AI Clients
 

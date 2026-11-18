@@ -195,7 +195,7 @@ Claude Code / Claude Desktop       Codex CLI / IDE        OpenAI / Anthropic API
 
 把应用注册为 **Notion Public OAuth Integration**，在 GUI 中提供 `Connect with Notion`（浏览器 OAuth 流程），由用户逐个 Workspace 授权；保存各自授权结果，不再逐个手工复制 token。OAuth app 是同一个，Workspace 授权仍互相独立。需要处理 token 更新与撤销、OAuth state、回调来源验证。OAuth 未完成前，GUI 必须可通过 Internal Connection 工作，不得将后续 OAuth 当成首版交付的隐含前置条件。
 
-当前源码已加入本机回调、一次性 state、安全凭证保存、逐空间授权/重新授权和显式 token 刷新。Owner 已创建一个 OAuth app，仍需在新版 GUI 录入 client secret 并亲自完成测试空间授权。新原生 host 的本机构建被 Smart App Control 拦截；工程验证与真实 OAuth/Notion 验收分开记录，见 [本轮记录](qa/2026-11-16-milestone-1-wake-oauth.md)。
+当前源码已加入本机回调、一次性 state、安全凭证保存、逐空间授权/重新授权和显式 token 刷新。2026-11-19 已用同一个 app 完成两个测试空间的真实 OAuth、身份/搜索/页面读取、跨空间拒绝和重启持久化验证；113 项测试及 Windows CI 通过，最终便携版已打开。内容调用仍只读，真实 token 刷新/撤销及其余 M1 功能单独验收，见 [真实验收记录](qa/2026-11-19-real-oauth.md)。
 
 ### 4.3 Windows 图形管理界面（首个正式版本必须交付）
 

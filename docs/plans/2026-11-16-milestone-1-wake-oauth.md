@@ -25,3 +25,7 @@ M1 as a whole remains open: this slice does not complete content CRUD, migration
 ## Authorized CI follow-up
 
 The Owner subsequently approved pushing the branch, building in Windows CI and opening the preview. The latest runtime/UI commit passed 109 tests, bundled Node/MCP smoke and a full native/NSIS build. Both installer and portable artifacts were downloaded and their commit/file hashes verified. The portable native app started successfully and displayed the existing Internal Connection plus OAuth setup/switch actions. A normal close of the preceding CI preview also reaped its owned backend. Real OAuth authorization remains waiting on the Owner's local client-secret entry and consent. Details: [CI follow-up](../qa/2026-11-16-windows-ci-oauth.md).
+
+## Real OAuth follow-up — 2026-11-19
+
+Both test Workspaces now passed real grants, identity/search/page reads, cross-Workspace denial and restart persistence. Their one-per-Workspace group entries were observed in Chats. Live testing exposed and fixed the removed archived field and OAuth-method loss after failed reads. The final runtime commit passed 113 tests and Windows CI; its checked portable artifact was reopened with both OAuth connections intact. Real refresh/revocation, route mutations, authenticated Claude and full M1 remain separate gates. See [live acceptance](../qa/2026-11-19-real-oauth.md).
