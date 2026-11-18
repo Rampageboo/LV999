@@ -17,3 +17,7 @@ Owner authorization: implement M1 creation/edit/deletion, validate only in the t
 - Notion page/block deletion is a recoverable move to trash through the official API, not a claimed permanent deletion. The generic destructive path still requires review of an exact current target and a one-use approval; the Owner has already authorized cleanup of acceptance-created disposable test objects.
 - Notion does not provide a general cross-editor transaction: local leases plus a fresh last-edited comparison detect observed conflicts, without claiming an atomic server-side compare-and-swap.
 - Native authentication check: Claude subscription sign-in was confirmed via its own CLI status before model acceptance. The actual model/session/tool results remain to be verified separately.
+
+## Outcome
+
+M1 content/client/native-wake gates passed; implementation and evidence are in [the acceptance record](../qa/2026-11-19-m1-content.md). Windows CI built the runtime, exact artifact identity and hashes passed, and the new native app was opened and exercised. Both test Workspaces passed CRUD plus real Claude/Codex create/write/readback; Claude Stop remained effective across scheduler restart. Configuration application has a reviewed GUI path and isolated backup/preservation/conflict tests. No global client config was modified during acceptance. The remaining clean-Windows/no-Node environment check is stated separately; M2 background/recovery and migration work were not included.
