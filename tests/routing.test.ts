@@ -87,6 +87,11 @@ it('attributes an unshared page to that workspace without invalidating the entir
   expect((await f.service.inspectPage({ workspace_id: f.a, reference: f.rootB })).code).toBe('NOT_FOUND_OR_NOT_SHARED');
   expect(f.store.list().find(w => w.id === f.a)).toEqual(before); expect(f.adapterB.page).not.toHaveBeenCalled();
 });
+it('preserves connection proof for a missing raw page read through the MCP service path',async()=>{
+  const f=fixture();await f.service.verify(f.a);const before=f.store.list().find(w=>w.id===f.a);
+  expect((await f.service.page(f.a,f.rootB)).code).toBe('NOT_FOUND_OR_NOT_SHARED');
+  expect(f.store.list().find(w=>w.id===f.a)).toEqual(before);expect(f.adapterB.page).not.toHaveBeenCalled();
+});
 it('blocks a swapped workspace token before browsing or reading the proposed root', async () => {
   const f = fixture(); f.secrets.set(f.a, f.secretB);
   expect((await f.service.browsePages({ workspace_id: f.a })).code).toBe('WORKSPACE_MISMATCH');

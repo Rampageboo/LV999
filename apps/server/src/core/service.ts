@@ -63,8 +63,8 @@ export class Service {
     if (!response.success) throw new DomainError('IDENTITY_UNAVAILABLE', 'Notion returned an invalid read-access response. The connection was not saved.');
     return { checked_at: new Date().toISOString(), sampled_objects: response.data.results.length, has_more: response.data.has_more };
   }
-  private proof(identity: Identity, access: WorkspaceView['read_access']): Partial<WorkspaceView> {
-    return { auth_kind: this.store.list().find(w => w.id === identity.workspace_id)?.auth_kind ?? 'internal',
+  private proof(identity: Identity, access: WorkspaceView['read_access'], authKind: 'internal' | 'oauth'): Partial<WorkspaceView> {
+    return { auth_kind: authKind,
       status: 'Connected', verified_name: identity.workspace_name, bot_id: identity.bot_id,
       checked_at: new Date().toISOString(), code: 'OK', message: null, read_access: access };
   }
@@ -79,11 +79,12 @@ export class Service {
     if (decoded.oauth && decoded.oauth.identity.workspace_id.toLowerCase() !== id.toLowerCase())
       throw new DomainError('WORKSPACE_MISMATCH', 'The OAuth credential belongs to a different workspace. Reauthorize this workspace.');
     const adapter = this.makeAdapter(decoded.token, decoded.oauth);
-    return { adapter, identity: await this.identity(adapter, id) };
+    return { adapter, identity: await this.identity(adapter, id), authKind: decoded.oauth ? 'oauth' as const : 'internal' as const };
   }
   private failed<T>(id: string | null, action: string, error: unknown, updateStatus = true): Result<T> {
     const failure = safeError(error);
-    if (id && updateStatus) this.store.verification(id, { status: failure.code === 'AUTH_REQUIRED' ? 'Auth required' : 'Degraded',
+    if (id && updateStatus) this.store.verification(id, { auth_kind: this.store.list().find(w => w.id === id)?.auth_kind,
+      status: failure.code === 'AUTH_REQUIRED' ? 'Auth required' : 'Degraded',
       checked_at: new Date().toISOString(), code: failure.code, message: failure.message, read_access: null });
     this.store.log({ level: 'error', action, workspace_id: id, code: failure.code });
     return result<T>(null, id, failure.code, [failure.message]);
@@ -136,7 +137,7 @@ export class Service {
         throw new DomainError('WORKSPACE_EXISTS', 'This workspace is already connected. Use its Reauthorize action to replace the credential.');
       const access = await this.readAccess(adapter);
       const config = WorkspaceInput.parse({ id, label: label || identity.workspace_name.slice(0, 80), environment: 'test' });
-      await this.saveCredential(config, token, { ...this.proof(identity, access), auth_kind: 'internal' }, false);
+      await this.saveCredential(config, token, this.proof(identity, access, 'internal'), false);
       return this.connectionReply(id);
     } catch (error) { return this.failed(id, 'Workspace connection failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
   }
@@ -152,7 +153,7 @@ export class Service {
       const adapter = this.makeAdapter(parsed.data.token);
       const identity = await this.identity(adapter, id);
       const access = await this.readAccess(adapter);
-      await this.saveCredential(current, parsed.data.token, { ...this.proof(identity, access), auth_kind: 'internal' }, true);
+      await this.saveCredential(current, parsed.data.token, this.proof(identity, access, 'internal'), true);
       return this.connectionReply(id);
     } catch (error) { return this.failed(id, 'Workspace reauthorization failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
   }
@@ -169,7 +170,7 @@ export class Service {
       if (input.workspace_id && !current) throw new DomainError('UNKNOWN_WORKSPACE', 'The workspace is no longer registered.');
       const access = await this.readAccess(adapter);
       const config = current ?? WorkspaceInput.parse({ id, label: input.label || identity.workspace_name.slice(0, 80), environment: 'test' });
-      await this.saveCredential(config, encodeCredential(credential), { ...this.proof(identity, access), auth_kind: 'oauth' }, Boolean(input.workspace_id));
+      await this.saveCredential(config, encodeCredential(credential), this.proof(identity, access, 'oauth'), Boolean(input.workspace_id));
       return this.connectionReply(id);
     } catch (error) { return this.failed<WorkspaceView>(id, 'Workspace OAuth connection failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
   }
@@ -195,35 +196,35 @@ export class Service {
       const encoded = encodeCredential(credential);
       await this.vault.write(id, encoded);
       if (await this.vault.read(id) !== encoded) throw new Error();
-      this.store.saveConnection(current, { ...this.proof(identity, access), auth_kind: 'oauth' }, true, owner);
+      this.store.saveConnection(current, this.proof(identity, access, 'oauth'), true, owner);
       return this.connectionReply(id);
     } catch (error) {
       const failure = refreshed ? new DomainError('CREDENTIAL_STATE_UNCERTAIN', 'Notion renewed the credential, but saving or validation could not be confirmed. Use Reauthorize; the old refresh token may already be consumed.') : safeError(error);
       return this.failed(id, 'OAuth token refresh failed', failure, !['CONNECTION_BUSY','INVALID_INPUT','UNKNOWN_WORKSPACE'].includes(failure.code));
     } finally { if (locked) this.store.releaseConnection(id, owner); }
   }
-  private async read<T>(id: string, action: string, callback: (adapter: NotionAdapter) => Promise<T>): Promise<Result<T>> {
+  private async read<T>(id: string, action: string, callback: (adapter: NotionAdapter) => Promise<T>, targetRead = false): Promise<Result<T>> {
     try {
-      const { adapter, identity } = await this.verifiedAdapter(id);
+      const { adapter, identity, authKind } = await this.verifiedAdapter(id);
       const data = await callback(adapter);
-      this.store.verification(id, this.proof(identity, this.store.list().find(w => w.id === id)?.read_access ?? null));
+      this.store.verification(id, this.proof(identity, this.store.list().find(w => w.id === id)?.read_access ?? null, authKind));
       this.store.log({ level: 'info', action, workspace_id: id, code: 'OK' });
       return result(data, id);
     } catch (error) {
-      return this.failed<T>(id, action, error);
+      return targetRead ? this.targetFailure<T>(id, action, error) : this.failed<T>(id, action, error);
     }
   }
   async verify(id: string): Promise<Result<WorkspaceView>> {
     try {
-      const { adapter, identity } = await this.verifiedAdapter(id);
+      const { adapter, identity, authKind } = await this.verifiedAdapter(id);
       const access = await this.readAccess(adapter);
-      this.store.verification(id, this.proof(identity, access));
+      this.store.verification(id, this.proof(identity, access, authKind));
       this.store.log({ level: 'info', action: 'Workspace verified', workspace_id: id, code: 'OK' });
       return this.connectionReply(id);
     } catch (error) { return this.failed(id, 'Workspace verification failed', error); }
   }
   search(id: string, query: string, cursor?: string) { return this.read(id, 'Workspace search', a => a.search(query, cursor)); }
-  page(id: string, pageId: string) { return this.read(id, 'Page read', a => a.page(pageId)); }
+  page(id: string, pageId: string) { return this.read(id, 'Page read', a => a.page(pageId), true); }
   async browsePages(input: unknown): Promise<Result<PageBatch>> {
     const parsed = BrowsePagesInput.safeParse(input);
     if (!parsed.success) return result<PageBatch>(null, null, 'INVALID_INPUT', ['Select a test workspace and a valid title query/cursor.']);
@@ -237,10 +238,10 @@ export class Service {
     return reply;
   }
   private async inspect(workspaceId: string, pageId: string) {
-    const { adapter, identity } = await this.verifiedAdapter(workspaceId);
+    const { adapter, identity, authKind } = await this.verifiedAdapter(workspaceId);
     const page = pageMetadata(await adapter.page(pageId), workspaceId);
     if (page.id !== pageId) throw new DomainError('INVALID_RESPONSE', 'Notion returned a different page ID. No mapping was changed.');
-    this.store.verification(workspaceId, this.proof(identity, this.store.list().find(w => w.id === workspaceId)?.read_access ?? null));
+    this.store.verification(workspaceId, this.proof(identity, this.store.list().find(w => w.id === workspaceId)?.read_access ?? null, authKind));
     return page;
   }
   private targetFailure<T>(id: string | null, action: string, error: unknown): Result<T> {

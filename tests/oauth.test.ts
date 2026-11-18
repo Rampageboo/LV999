@@ -119,6 +119,16 @@ it('switches an existing Internal Connection to OAuth only after validating that
   expect(decodeCredential(f.secrets.get(id)!).oauth?.identity.workspace_id).toBe(id);
   expect(f.service.chatOverview().data!.workspaces).toHaveLength(1);
 });
+it('retains OAuth kind on authentication failure and recovers its actual kind from the vault on verification',async()=>{
+  const f=await fixture(),a=f.grant(),id=a.value.identity.workspace_id,url=await f.start();
+  await f.callback(url.searchParams.get('state'),a.code);await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));
+  const credential=f.secrets.get(id)!;f.secrets.delete(id);
+  expect((await f.service.verify(id)).code).toBe('AUTH_REQUIRED');
+  expect(f.store.list()[0]).toMatchObject({auth_kind:'oauth',status:'Auth required'});
+  f.secrets.set(id,credential);f.store.verification(id,{auth_kind:'internal',status:'Degraded'});
+  expect((await f.service.verify(id)).ok).toBe(true);
+  expect(f.store.list()[0]).toMatchObject({auth_kind:'oauth',status:'Connected'});
+});
 it('refresh never pretends the old refresh token was restored after renewal and a local save failure', async () => {
   const f=await fixture(),a=f.grant(),url=await f.start();await f.callback(url.searchParams.get('state'),a.code);
   await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));
