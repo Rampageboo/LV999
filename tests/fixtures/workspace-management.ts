@@ -24,7 +24,7 @@ const service = new Service(store, new WindowsVault(), token => {
   function pages() {
     return ['root', 'root-two', 'record', 'archived'].map(pageKind => ({ object: 'page', id: fixtureId(seed!, `${workspace}-${pageKind}`),
       properties: { custom_title: { type: 'title', title: [{ plain_text: pageKind.startsWith('root') ? 'Shared root' : pageKind === 'record' ? 'Database record' : 'Archived page' }] } },
-      parent: { type: pageKind === 'record' ? 'data_source_id' : 'workspace' }, archived: pageKind === 'archived', in_trash: false,
+      parent: { type: pageKind === 'record' ? 'data_source_id' : 'workspace' }, in_trash: pageKind === 'archived',
       last_edited_time: new Date().toISOString() }));
   }
   const fetchMock: typeof fetch = async (input, init) => {

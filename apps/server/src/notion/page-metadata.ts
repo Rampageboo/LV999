@@ -4,7 +4,8 @@ import { DomainError } from './adapter.js';
 
 const Page = z.object({
   object: z.literal('page'), id: z.uuid(), properties: z.record(z.string(), z.unknown()),
-  parent: z.object({ type: z.string() }), archived: z.boolean(), in_trash: z.boolean(),
+  // 2026-03-11 removed archived; in_trash is still required. Keep a supplied legacy flag conservative.
+  parent: z.object({ type: z.string() }), archived: z.boolean().optional(), in_trash: z.boolean(),
   last_edited_time: z.string().optional(),
 });
 
@@ -20,7 +21,7 @@ export function pageMetadata(raw: unknown, workspaceId: string): AccessiblePage 
       break;
     }
   }
-  const active = !page.archived && !page.in_trash;
+  const active = page.archived !== true && !page.in_trash;
   const ordinary = ['workspace', 'page_id'].includes(page.parent.type);
   const id = page.id.toLowerCase();
   return { workspace_id: workspaceId, id, title: title || 'Untitled',

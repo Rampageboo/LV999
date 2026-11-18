@@ -6,13 +6,13 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { Store } from '../apps/server/src/infra/store.js';
 import { Service } from '../apps/server/src/core/service.js';
 import { DomainError, type NotionAdapter } from '../apps/server/src/notion/adapter.js';
-import { pageReference } from '../apps/server/src/notion/page-metadata.js';
+import { pageReference, pageMetadata, pageBatch } from '../apps/server/src/notion/page-metadata.js';
 
 const cleanup: (() => void)[] = [];
 afterEach(() => { cleanup.splice(0).reverse().forEach(close => close()); });
 function rawPage(id: string, title = 'Shared root', parent = 'workspace', active = true) {
   return { object: 'page', id, properties: { custom_title_property: { type: 'title', title: [{ plain_text: title }] } },
-    parent: { type: parent }, archived: !active, in_trash: !active, last_edited_time: new Date().toISOString(), url: 'javascript:untrusted' };
+    parent: { type: parent }, in_trash: !active, last_edited_time: new Date().toISOString(), url: 'javascript:untrusted' };
 }
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'lv999-routing-'));
@@ -38,6 +38,18 @@ function fixture() {
   return { store, service, directory, a, b, rootA, rootB, extraA, secrets, secretA, secretB, adapterA, adapterB, pagesA, pagesB, vault, input };
 }
 
+it('accepts current API pages without archived and keeps them in search results', () => {
+  const workspace=randomUUID(),id=randomUUID(),page=rawPage(id);
+  expect('archived' in page).toBe(false);
+  expect(pageMetadata(page,workspace)).toMatchObject({id,title:'Shared root',root_eligible:true});
+  expect(pageBatch({results:[page],has_more:false,next_cursor:null},workspace)).toMatchObject({pages:[{id}],skipped_objects:0});
+});
+it('still rejects unknown trash status and excludes trashed or legacy-archived roots', () => {
+  const workspace=randomUUID(),page=rawPage(randomUUID()),{in_trash:_,...unknownTrash}=page;
+  expect(()=>pageMetadata(unknownTrash,workspace)).toThrow();
+  expect(pageMetadata({...page,in_trash:true},workspace).root_eligible).toBe(false);
+  expect(pageMetadata({...page,archived:true},workspace).root_eligible).toBe(false);
+});
 it('browses only pages and forwards title queries and opaque cursors to the selected identity', async () => {
   const f = fixture();
   const first = await f.service.browsePages({ workspace_id: f.a, query: 'Shared' });

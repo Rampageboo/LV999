@@ -37,6 +37,8 @@ The private management pipe additionally accepts `connect_workspace` and `reauth
 
 Management also exposes `browse_pages`, `inspect_page`, `save_project` and `resolve_project`. Browsing filters search to pages, forwards opaque cursors, reports omitted incomplete objects and refuses broken pagination. Exact page checks accept UUIDs or supported Notion HTTPS page links, extract only the ID, and call the fixed Notion API; arbitrary URLs are not fetched. Page summaries contain metadata only, not block content. Saving a mapping is a local SQLite change and makes only read-only Notion calls; it re-retrieves the proposed page and rejects archived/trash/record roots. Every project key is unique; revision matching prevents stale editors from overwriting mappings.
 
+The pinned `2026-03-11` API removed `archived` from page responses. Normalization requires the current `in_trash` flag, without requiring `archived`; a supplied legacy `archived: true` also blocks root eligibility. Missing trash status is not treated as active. See the [official page schema](https://developers.notion.com/reference/page). Routing/GUI fixtures use the current response shape so synthetic tests cannot conceal this contract regression.
+
 ## Failure attribution
 
 - `AUTH_REQUIRED`: no vault entry, or HTTP 401. Reauthorize this exact workspace.
