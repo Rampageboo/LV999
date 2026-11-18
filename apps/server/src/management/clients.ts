@@ -1,5 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { readFile, access, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { readFile, access, mkdtemp, mkdir, writeFile, rm,lstat,rename,copyFile,open } from 'node:fs/promises';
+import {constants} from 'node:fs';
+import {createHash,randomUUID} from 'node:crypto';
+import {z} from 'zod';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve, delimiter, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +28,7 @@ const names = { claude: 'Claude Code', codex: 'Codex' };
 export class ClientManager {
   readonly paths: ClientPaths;
   private states: ClientView[];
+  private configPlans=new Map<string,{path:string;before:Buffer|null;after:string;expires:number}>();
   constructor(data: string, paths?: Partial<ClientPaths>) {
     this.paths = { ...defaultPaths(data), ...paths };
     this.states = (['claude', 'codex'] as const).map(id => ({ id, name: names[id], status: 'Not tested', version: null, executable: null,
@@ -32,23 +36,71 @@ export class ClientManager {
       detail: 'Detect configuration, then test the transport and installed client separately.', detected_at: null, handshake: null }));
   }
   snapshot() { return this.states.map(state => ({ ...state })); }
-  private entry(client: ClientKind, workspaces: string[]): Entry {
+  private entry(client: ClientKind, workspaces: string[], writes:string[]=[]): Entry {
     return { type: 'stdio', command: this.paths.executable, args: [this.paths.entry, 'mcp', '--data-dir', this.paths.data,
-      '--client', client, ...workspaces.flatMap(id => ['--chat-workspace', id])] };
+      '--client', client, ...workspaces.flatMap(id => ['--chat-workspace', id]),...writes.flatMap(id=>['--write-workspace',id])] };
   }
   generate(input: unknown): Result<GeneratedConfig> {
     const parsed = ClientConfigInput.safeParse(input);
     if (!parsed.success) return result<GeneratedConfig>(null, null, 'INVALID_INPUT', ['Select a client and valid Workspace chat permissions.']);
-    const { client, chat_workspace_ids } = parsed.data;
-    const entry = this.entry(client, [...new Set(chat_workspace_ids)]);
+    const { client, chat_workspace_ids,write_workspace_ids } = parsed.data;
+    const entry = this.entry(client, [...new Set(chat_workspace_ids)],[...new Set(write_workspace_ids)]);
     const text = client === 'claude' ? JSON.stringify({ mcpServers: { [SERVER_NAME]: entry } }, null, 2) :
       `[mcp_servers.${SERVER_NAME}]\ncommand = ${JSON.stringify(entry.command)}\nargs = ${JSON.stringify(entry.args)}\nstartup_timeout_sec = 30\ntool_timeout_sec = 60\n`;
     return result({ client, format: client === 'claude' ? 'JSON' : 'TOML', config_path: this.states.find(s => s.id === client)!.config_path,
-      server_name: SERVER_NAME, text, chat_workspace_ids });
+      server_name: SERVER_NAME, text, chat_workspace_ids,write_workspace_ids });
+  }
+  private async configBytes(path:string){
+    try{const info=await lstat(path);if(!info.isFile()||info.isSymbolicLink()||info.size>2_000_000)throw new Error('UNSAFE_CONFIG');return await readFile(path);}
+    catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return null;throw error;}
+  }
+  async previewApply(input:unknown){
+    try{
+      const generated=this.generate(input);if(!generated.ok)throw new Error();const value=generated.data!,before=await this.configBytes(value.config_path),source=before?.toString('utf8')??'';
+      let after:string,replaces=false;
+      if(value.client==='claude'){
+        const config=source?JSON.parse(source):{};
+        if(!config||typeof config!=='object'||Array.isArray(config)||(config.mcpServers&&(typeof config.mcpServers!=='object'||Array.isArray(config.mcpServers))))throw new Error();
+        replaces=Boolean(config.mcpServers?.lv999);config.mcpServers={...config.mcpServers,lv999:JSON.parse(value.text).mcpServers.lv999};after=JSON.stringify(config,null,2)+'\n';
+      }else{
+        const config=source?parse(source):{};replaces=Boolean((config.mcp_servers as any)?.lv999);
+        const lines=source.split(/(?<=\n)/),ranges:{start:number;end:number}[]=[];let active:number|null=null;
+        for(let i=0;i<lines.length;i++)if(/^\s*\[/.test(lines[i])){
+          if(active!==null){ranges.push({start:active,end:i});active=null;}
+          if(/^\s*\[\s*mcp_servers\s*\.\s*(?:lv999|"lv999"|'lv999')(?:\s*\.[^\]]+)?\s*\]\s*(?:#.*)?$/.test(lines[i].trimEnd()))active=i;
+        }
+        if(active!==null)ranges.push({start:active,end:lines.length});
+        if(replaces&&!ranges.length)throw new Error('INLINE_ENTRY_NEEDS_MANUAL_MERGE');
+        const keep=lines.filter((_,i)=>!ranges.some(r=>i>=r.start&&i<r.end)).join('');after=keep+(keep&&!keep.endsWith('\n')?'\n':'')+'\n'+value.text;
+        const parsed=parse(after);if(!(parsed.mcp_servers as any)?.lv999)throw new Error();
+        const unrelated=(value:any)=>{const copy={...value,mcp_servers:{...value.mcp_servers}};delete copy.mcp_servers.lv999;return JSON.stringify(copy);};
+        if(unrelated(config)!==unrelated(parsed))throw new Error('UNRELATED_CONFIG_CHANGED');
+      }
+      for(const [id,plan]of this.configPlans)if(plan.expires<Date.now())this.configPlans.delete(id);
+      const id=randomUUID();this.configPlans.set(id,{path:value.config_path,before,after,expires:Date.now()+120000});
+      return result({plan_id:id,config_path:value.config_path,replaces_existing_entry:replaces,backup_required:before!==null});
+    }catch{return result(null,null,'INVALID_INPUT',['Configuration could not be safely merged. Keep the existing file and merge the generated LV999 entry manually.']);}
+  }
+  async apply(input:unknown){
+    let temporary:string|undefined,lock:Awaited<ReturnType<typeof open>>|undefined,lockPath:string|undefined;
+    try{
+      const {plan_id}=z.object({plan_id:z.uuid()}).strict().parse(input),plan=this.configPlans.get(plan_id);
+      if(!plan||plan.expires<Date.now())throw new Error('EXPIRED');
+      await mkdir(dirname(plan.path),{recursive:true});lockPath=plan.path+'.lv999-lock';lock=await open(lockPath,'wx',0o600);
+      const current=await this.configBytes(plan.path),digest=(bytes:Buffer|null)=>bytes===null?'missing':createHash('sha256').update(bytes).digest('hex');
+      if(digest(current)!==digest(plan.before))throw new Error('CONFIG_CHANGED');
+      const backup=plan.before===null?null:plan.path+`.lv999-${plan_id}.bak`;
+      if(backup)await copyFile(plan.path,backup,constants.COPYFILE_EXCL);
+      temporary=plan.path+`.lv999-${plan_id}.tmp`;await writeFile(temporary,plan.after,{flag:'wx',mode:0o600});
+      if(digest(await this.configBytes(plan.path))!==digest(plan.before))throw new Error('CONFIG_CHANGED');
+      await rename(temporary,plan.path);temporary=undefined;this.configPlans.delete(plan_id);
+      return result({config_path:plan.path,backup_path:backup,reload_required:true});
+    }catch{return result(null,null,'LOCAL_SAVE_FAILED',['Configuration was not confirmed applied. Close the native client, refresh the preview and retry; preserve any backup. Other client settings are never intentionally replaced.']);}
+    finally{if(temporary)await rm(temporary,{force:true}).catch(()=>{});if(lock){await lock.close();await rm(lockPath!,{force:true}).catch(()=>{});}}
   }
   private async locate(client: ClientKind) {
     const candidates = process.platform === 'win32' ? [`${client}.exe`, `${client}.cmd`] : [client];
-    for (const folder of this.paths.path.split(delimiter).filter(Boolean)) for (const candidate of candidates) {
+    for (const candidate of candidates) for (const folder of this.paths.path.split(delimiter).filter(Boolean)) {
       const file = join(folder.replace(/^"|"$/g, ''), candidate);
       try { await access(file); return file; } catch {}
     }
@@ -104,8 +156,8 @@ export class ClientManager {
     }
     return result(this.snapshot());
   }
-  private async sdk(clientId: ClientKind, workspaces: string[]) {
-    const entry = this.entry(clientId, workspaces);
+  private async sdk(clientId: ClientKind, workspaces: string[],writes:string[]=[]) {
+    const entry = this.entry(clientId, workspaces,writes);
     const client = new Client({ name: 'lv999-handshake-test', version: '0.1.0' });
     try {
       const transport = new StdioClientTransport({ command: entry.command!, args: entry.args, stderr: 'pipe', env: this.paths.transportEnv });
@@ -153,18 +205,18 @@ export class ClientManager {
   async test(input: unknown): Promise<Result<ClientView>> {
     const parsed = ClientTestInput.safeParse(input);
     if (!parsed.success) return result<ClientView>(null, null, 'INVALID_INPUT', ['Select a client and handshake type.']);
-    const { client, kind, chat_workspace_ids } = parsed.data;
+    const { client, kind, chat_workspace_ids,write_workspace_ids } = parsed.data;
     const state = this.states.find(value => value.id === client)!;
     let profileRoot: string | null = null;
     try {
       let count: number;
-      if (kind === 'sdk') count = await this.sdk(client, chat_workspace_ids);
+      if (kind === 'sdk') count = await this.sdk(client, chat_workspace_ids,write_workspace_ids);
       else {
         const executable = await this.locate(client);
         if (!executable) throw new Error('CLIENT_NOT_INSTALLED');
         profileRoot = await mkdtemp(join(tmpdir(), 'lv999-client-probe-'));
         const profile = join(profileRoot, 'profile'); await mkdir(profile);
-        const generated = this.generate({ client, chat_workspace_ids }).data!;
+        const generated = this.generate({ client, chat_workspace_ids,write_workspace_ids }).data!;
         if (client === 'codex') { await writeFile(join(profile, 'config.toml'), generated.text); count = await this.codexNative(executable, profile); }
         else {
           await writeFile(join(profile, '.claude.json'), generated.text);
@@ -172,7 +224,7 @@ export class ClientManager {
           const probe = await this.run(executable, ['mcp', 'get', SERVER_NAME], childEnvironment({ CLAUDE_CONFIG_DIR: profile,
             DISABLE_TELEMETRY: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' }), 40000, profileRoot);
           if (!claudeHealthPassed(probe.code, probe.text)) throw new Error('NATIVE_HANDSHAKE_NOT_CONFIRMED');
-          count = await this.sdk(client, chat_workspace_ids);
+          count = await this.sdk(client, chat_workspace_ids,write_workspace_ids);
         }
       }
       state.handshake = { kind, ok: true, checked_at: new Date().toISOString(), tool_count: count,

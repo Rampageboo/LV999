@@ -21,6 +21,13 @@ function fixture(bridge?:AgentBridge){
 it('ordinary messages, including literal @ text, never invoke the bridge',async()=>{
   const f=fixture();f.configure();f.send([], {body:'@Codex is plain text'});f.engine.tick();await Promise.resolve();expect(f.fake.run).not.toHaveBeenCalled();
 });
+it('keeps Notion access opt-in and starts a new session when its tool scope changes',async()=>{
+  const f=fixture();const binding=f.configure().data!;expect(binding.notion_tools).toBe(false);
+  const first=f.send(['codex']).data!;f.engine.tick();await vi.waitFor(()=>expect(f.hub.wakes.messages(first.id)[0].status).toBe('ACKNOWLEDGED'));
+  const current=f.hub.wakes.view(f.hub.wakes.rows()[0]);expect(current.native_session_id).not.toBeNull();
+  const changed=f.engine.configure({workspace_id:f.workspace,actor:'codex',model:current.model,effort:current.effort,enabled:true,notion_tools:true,expected_revision:current.revision});
+  expect(changed.data).toMatchObject({notion_tools:true,native_session_id:null});
+});
 it('creates one durable wake per structured target and keeps retries idempotent',()=>{
   const f=fixture();f.configure();f.configure('claude');const key=randomUUID();
   const first=f.send(['codex','claude'],{idempotency_key:key});

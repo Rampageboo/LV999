@@ -6,13 +6,13 @@ import type { MessageHub } from './hub.js';
 import { NativeAgentBridge, BridgeFailure, type AgentBridge } from './native-bridge.js';
 import type { BindingRow } from './wake-store.js';
 
-type Claim={ wake_id:string; message_id:string; nonce:string; binding:BindingRow; owner:string; body:string };
+type Claim={ wake_id:string; message_id:string; nonce:string; binding:BindingRow; owner:string; body:string;projectKey:string|null };
 export class WakeEngine {
   private readonly owner=randomUUID();
   private readonly running=new Map<string,{bindingId:string;generation:number;abort:AbortController}>();
   private timer:ReturnType<typeof setInterval>|null=null;
   private closing=false;
-  constructor(readonly hub:MessageHub,private bridge:AgentBridge=new NativeAgentBridge()){}
+  constructor(readonly hub:MessageHub,private bridge:AgentBridge=new NativeAgentBridge(),private native?:{executable:string;entry:string}){}
   start(){if(this.timer)return;this.closing=false;this.timer=setInterval(()=>this.tick(),500);this.timer.unref();this.tick();}
   shutdown(){this.closing=true;if(this.timer)clearInterval(this.timer);this.timer=null;for(const job of this.running.values())job.abort.abort();}
   private fence(claim:Claim) {
@@ -30,8 +30,8 @@ export class WakeEngine {
       db.prepare(`UPDATE wake_requests SET status='DISPATCHING',attempts=attempts+1,lease_owner=?,lease_until=?,generation=?,code=NULL,updated_at=? WHERE id=?`)
         .run(this.owner,Date.now()+180000,binding.generation,new Date().toISOString(),wake.id!);
       db.prepare(`UPDATE agent_bindings SET status='Busy',active_wake_id=?,last_code=NULL,updated_at=? WHERE id=?`).run(wake.id!,new Date().toISOString(),binding.id);
-      const message=db.prepare('SELECT body FROM chat_messages WHERE id=?').get(wake.message_id!)!;
-      db.exec('COMMIT');return {wake_id:String(wake.id),message_id:String(wake.message_id),nonce:String(wake.nonce),binding,owner:this.owner,body:String(message.body)};
+      const message=db.prepare('SELECT body,project_key FROM chat_messages WHERE id=?').get(wake.message_id!)!;
+      db.exec('COMMIT');return {wake_id:String(wake.id),message_id:String(wake.message_id),nonce:String(wake.nonce),binding,owner:this.owner,body:String(message.body),projectKey:message.project_key?String(message.project_key):null};
     }catch(error){db.exec('ROLLBACK');throw error;}
   }
   private expire(){
@@ -64,6 +64,7 @@ export class WakeEngine {
     try {
       if(!this.fence(claim))return;
       const reply=await this.bridge.run({actor:claim.binding.actor,model:claim.binding.model,effort:claim.binding.effort,
+        ...(claim.binding.notion_tools&&this.native?{mcp:{...this.native,dataDir:this.hub.wakes.store.directory,workspaceId:claim.binding.workspace_id,...(claim.projectKey?{projectKey:claim.projectKey}:{})}}:{}),
         cwd:join(this.hub.wakes.store.directory,'managed-sessions',claim.binding.id),nativeId:claim.binding.native_session_id,
         messageId:claim.message_id,nonce:claim.nonce,body:claim.body,signal:abort.signal,
         onSession:id=>{

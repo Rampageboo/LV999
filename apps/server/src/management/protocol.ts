@@ -6,8 +6,9 @@ import type { Service } from '../core/service.js';
 const Request = z.object({
   id: z.number().int(),
   method: z.enum(['snapshot', 'verify_workspace', 'connect_workspace', 'reauthorize_workspace', 'browse_pages', 'inspect_page', 'save_project', 'resolve_project',
-    'detect_clients', 'generate_client_config', 'test_client', 'chat_overview', 'read_chat', 'send_chat', 'configure_agent','stop_agent','resume_agent','retry_wake','shutdown_agents',
-    'oauth_status', 'configure_oauth', 'start_oauth', 'cancel_oauth', 'refresh_oauth']),
+    'detect_clients', 'generate_client_config','preview_client_config','apply_client_config', 'test_client', 'chat_overview', 'read_chat', 'send_chat', 'configure_agent','stop_agent','resume_agent','retry_wake','shutdown_agents',
+    'oauth_status', 'configure_oauth', 'start_oauth', 'cancel_oauth', 'refresh_oauth',
+    'content_read','set_workspace_writes','prepare_mutation','approve_mutation','execute_mutation','mutation_status','pending_mutations']),
   params: z.unknown().optional(),
 }).strict();
 
@@ -16,7 +17,7 @@ export async function runManagement(service: Service) {
   for await (const line of lines) {
     let id: number | null = null;
     try {
-      if (line.length > 65536) throw new Error('INVALID_INPUT');
+      if (line.length > 4*1024*1024) throw new Error('INVALID_INPUT');
       const request = Request.parse(JSON.parse(line));
       id = request.id;
       let value;
@@ -31,6 +32,8 @@ export async function runManagement(service: Service) {
         case 'resolve_project': value = await service.resolveProject(request.params); break;
         case 'detect_clients': value = await service.detectClients(); break;
         case 'generate_client_config': value = service.generateClientConfig(request.params); break;
+        case 'preview_client_config':value=await service.previewClientConfig(request.params);break;
+        case 'apply_client_config':value=await service.applyClientConfig(request.params);break;
         case 'test_client': value = await service.testClient(request.params); break;
         case 'chat_overview': value = service.chatOverview(); break;
         case 'read_chat': value = service.readChat(request.params); break;
@@ -45,6 +48,13 @@ export async function runManagement(service: Service) {
         case 'start_oauth': value = await service.oauth.start(request.params); break;
         case 'cancel_oauth': value = service.oauth.cancel(); break;
         case 'refresh_oauth': value = await service.refreshOAuth(WorkspaceRef.parse(request.params).workspace_id); break;
+        case 'content_read':value=await service.content.read(request.params);break;
+        case 'set_workspace_writes':value=await service.content.setEnabled(request.params);break;
+        case 'prepare_mutation':value=await service.content.prepare(request.params);break;
+        case 'approve_mutation':value=service.content.approve(request.params);break;
+        case 'execute_mutation':value=await service.content.execute(request.params);break;
+        case 'mutation_status':value=service.content.status(z.object({idempotency_key:z.uuid()}).parse(request.params).idempotency_key);break;
+        case 'pending_mutations':value=service.content.pending();break;
       }
       process.stdout.write(JSON.stringify({ id, result: value }) + '\n');
     } catch {

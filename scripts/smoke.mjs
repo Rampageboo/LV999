@@ -37,7 +37,9 @@ try {
   const transport = new StdioClientTransport({ command: exe, args: [script, 'mcp', '--data-dir', join(folder, 'mcp-data')], env, cwd: folder, stderr: 'pipe' });
   await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map(t => t.name).sort(), ['get_page', 'list_projects', 'list_workspaces', 'resolve_project', 'search_workspace', 'verify_workspace']);
+  assert.deepEqual(tools.map(t => t.name).sort(), ['get_page','list_projects','list_workspaces','resolve_project','search_workspace','verify_workspace','search_all',
+    'get_page_tree','get_block_children','get_database_schema','get_data_source','query_data_source','list_databases','get_page_markdown','list_views',
+    'create_page','update_page','append_blocks','update_block','delete_block','trash_page','restore_page','create_database','create_data_source','update_data_source','create_record','update_record','create_view','upload_file','prepare_mutation','get_mutation_status'].sort());
   const response = await client.callTool({ name: 'list_workspaces', arguments: {} });
   assert.equal(JSON.parse(response.content[0].text).ok, true);
   assert.deepEqual(JSON.parse(response.content[0].text).data, []);

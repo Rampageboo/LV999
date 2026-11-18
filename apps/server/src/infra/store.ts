@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { WorkspaceInput, type Activity, type WorkspaceConfig, type WorkspaceView, type ProjectRoute, type SaveProjectRequest, type AccessiblePage } from '../../../../packages/contracts/src/index.js';
 export const projectNameLookup = (name: string) => name.normalize('NFKC').trim().toLowerCase();
 
@@ -14,6 +15,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS activity (seq INTEGER PRIMARY KEY, event TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS connection_locks (id TEXT PRIMARY KEY, owner TEXT NOT NULL, expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS oauth_settings (singleton INTEGER PRIMARY KEY CHECK(singleton=1), client_id TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS notion_request_slots (connection_hash TEXT PRIMARY KEY,next_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS project_routes (
         project_key TEXT PRIMARY KEY, name_lookup TEXT NOT NULL, workspace_id TEXT NOT NULL REFERENCES workspaces(id),
         revision INTEGER NOT NULL, route TEXT NOT NULL);
@@ -24,6 +26,13 @@ export class Store {
     if (['vibecode', 'honour'].includes(config.label.toLowerCase())) throw new Error('TEST_WORKSPACE_ONLY');
     this.db.prepare('INSERT INTO workspaces (id,config) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET config=excluded.config,verification=NULL')
       .run(config.id, JSON.stringify(config));
+  }
+  async requestSlot(connectionHash:string,signal?:AbortSignal){
+    signal?.throwIfAborted();this.db.exec('BEGIN IMMEDIATE');let scheduled:number;
+    try{const next=Number(this.db.prepare('SELECT next_at FROM notion_request_slots WHERE connection_hash=?').get(connectionHash)?.next_at??0);scheduled=Math.max(Date.now(),next);
+      this.db.prepare('INSERT INTO notion_request_slots(connection_hash,next_at) VALUES(?,?) ON CONFLICT(connection_hash) DO UPDATE SET next_at=excluded.next_at').run(connectionHash,scheduled+350);this.db.exec('COMMIT');
+    }catch(error){this.db.exec('ROLLBACK');throw error;}
+    if(scheduled>Date.now())await delay(scheduled-Date.now(),undefined,{signal});signal?.throwIfAborted();
   }
   list(): WorkspaceView[] {
     return (this.db.prepare('SELECT config,verification FROM workspaces ORDER BY id').all() as {config: string; verification: string | null}[])

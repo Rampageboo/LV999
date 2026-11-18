@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
+import { randomUUID,createHash } from 'node:crypto';
 import { APP_ID, APP_VERSION, NOTION_VERSION, ConnectWorkspaceInput, ReauthorizeWorkspaceInput, WorkspaceInput,
   BrowsePagesInput, InspectPageInput, SaveProjectInput, ResolveProjectInput,
   result, type Result, type Snapshot, type WorkspaceConfig, type WorkspaceView, type AccessiblePage, type PageBatch, type ProjectRoute } from '../../../../packages/contracts/src/index.js';
@@ -14,6 +14,8 @@ import type { AgentBridge } from '../messenger/native-bridge.js';
 import type { ChatIdentity } from '../../../../packages/contracts/src/index.js';
 import { NotionOAuth } from '../management/notion-oauth.js';
 import { decodeCredential, encodeCredential, type OAuthCredential, type OAuthEvidence, type OAuthExchange } from '../notion/oauth-credential.js';
+import { ContentService } from './content-service.js';
+import { notionRequestSignal } from '../notion/request-budget.js';
 
 export class Service {
   readonly started = new Date().toISOString();
@@ -22,16 +24,22 @@ export class Service {
   readonly messages: MessageHub;
   readonly wake:WakeEngine;
   readonly oauth: NotionOAuth;
+  readonly content: ContentService;
+  private makeAdapter:(token:string,oauth?:OAuthEvidence)=>NotionAdapter;
   constructor(readonly store: Store, private vault: Vault,
-    private makeAdapter: (token: string, oauth?: OAuthEvidence) => NotionAdapter = (token, oauth) => new OfficialNotionAdapter(token, undefined, oauth),
+    makeAdapter?: (token: string, oauth?: OAuthEvidence) => NotionAdapter,
     local?: { clients?: ClientManager; bridge?:AgentBridge; oauth?: OAuthExchange; oauthPort?: number; oauthTtlMs?: number }) {
+    this.makeAdapter=makeAdapter??((token,oauth)=>new OfficialNotionAdapter(token,undefined,oauth,()=>store.requestSlot(createHash('sha256').update(token).digest('hex'),notionRequestSignal())));
     this.clients = local?.clients ?? new ClientManager(store.directory);
     this.messages = new MessageHub(store);
-    this.wake=new WakeEngine(this.messages,local?.bridge);
+    this.wake=new WakeEngine(this.messages,local?.bridge,{executable:this.clients.paths.executable,entry:this.clients.paths.entry});
     this.oauth = new NotionOAuth(store, vault, (credential, input) => this.connectOAuth(credential, input), local?.oauth, local?.oauthPort, local?.oauthTtlMs);
+    this.content = new ContentService(store,id=>this.verifiedAdapter(id));
   }
   detectClients() { return this.clients.detect(); }
   generateClientConfig(input: unknown) { return this.clients.generate(input); }
+  previewClientConfig(input:unknown){return this.clients.previewApply(input);}
+  applyClientConfig(input:unknown){return this.clients.apply(input);}
   testClient(input: unknown) { return this.clients.test(input); }
   chatOverview() { return this.messages.overview({ actor: 'human', workspace_ids: 'owner' }); }
   readChat(input: unknown) { return this.messages.read({ actor: 'human', workspace_ids: 'owner' }, input); }
@@ -308,7 +316,7 @@ export class Service {
     }
   }
   snapshot(): Snapshot {
-    const workspaces = this.store.list();
+    const workspaces = this.store.list().map(workspace=>({...workspace,write_enabled:this.content.enabled(workspace.id)}));
     return {
       app_version: APP_VERSION, app_id: APP_ID, captured_at: new Date().toISOString(),
       backend: { status: 'Running', pid: process.pid, node: process.version, executable: process.execPath,
@@ -322,9 +330,9 @@ export class Service {
       ],
       workspaces, activity: this.store.activity(), projects: this.store.projects(),
       clients: this.clients.snapshot(),
-      jobs: [], settings: { read_only: true, remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
+      jobs: [], settings: { read_only: !workspaces.some(w=>w.write_enabled), remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
         data_dir: this.store.directory, updater_configured: false },
-      capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: true, group_chat: true, auto_wake: true, migration: false, content_write: false },
+      capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: true, group_chat: true, auto_wake: true, migration: false, content_write: true },
     };
   }
 }

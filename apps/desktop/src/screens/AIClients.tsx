@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ClientKind, ClientView, GeneratedConfig, Snapshot } from '../../../../packages/contracts/src/index.js';
-import { detectClients, generateClientConfig, testClient } from '../ipc/backend.js';
+import { detectClients, generateClientConfig, testClient,previewClientConfig,applyClientConfig,type ClientConfigPreview } from '../ipc/backend.js';
 
 export function AIClients({ data }: { data: Snapshot }) {
   const [clients, setClients] = useState<ClientView[]>(data.clients);
@@ -9,6 +9,8 @@ export function AIClients({ data }: { data: Snapshot }) {
   const [config, setConfig] = useState<GeneratedConfig | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
   const [access, setAccess] = useState<Record<ClientKind, string[]>>({ claude: [], codex: [] });
+  const [writes,setWrites]=useState<Record<ClientKind,string[]>>({claude:[],codex:[]});
+  const [preview,setPreview]=useState<ClientConfigPreview|null>(null);
   async function detect() {
     setBusy('detect'); setFailure(null);
     try { const response = await detectClients(); if (response.ok) setClients(response.data!); else setFailure(response.errors.join(' ')); }
@@ -16,14 +18,14 @@ export function AIClients({ data }: { data: Snapshot }) {
   }
   useEffect(() => { void detect(); }, []);
   async function generate(client: ClientKind) {
-    setBusy(client); setFailure(null); setCopyMessage('');
-    try { const response = await generateClientConfig(client, access[client]); if (response.ok) setConfig(response.data!); else setFailure(response.errors.join(' ')); }
+    setBusy(client); setFailure(null); setCopyMessage('');setPreview(null);
+    try { const response = await generateClientConfig(client, access[client],writes[client]); if (response.ok) setConfig(response.data!); else setFailure(response.errors.join(' ')); }
     catch { setFailure('Configuration generation failed. No client file was changed.'); } finally { setBusy(null); }
   }
   async function test(client: ClientKind, kind: 'native' | 'sdk') {
     setBusy(client); setFailure(null);
     try {
-      const response = await testClient(client, kind, access[client]);
+      const response = await testClient(client, kind, access[client],writes[client]);
       if (response.data) setClients(previous => previous.map(item => item.id === client ? response.data! : item));
       if (!response.ok) setFailure(response.errors.join(' '));
     } catch { setFailure('Handshake response unavailable. No connection success is assumed.'); } finally { setBusy(null); }
@@ -43,6 +45,9 @@ export function AIClients({ data }: { data: Snapshot }) {
           onChange={event => { setAccess(previous => ({ ...previous, [client.id]: event.target.checked ? [...previous[client.id], workspace.id] : previous[client.id].filter(id => id !== workspace.id) })); setConfig(null); }} />{workspace.label}</label>)
           : <p className="field-hint">No Workspace is configured. New configurations grant no chat access until selected here.</p>}
       </fieldset>
+      <fieldset className="chat-permissions" disabled={busy!==null}><legend>Notion write access in the generated configuration (opt-in)</legend>
+        {data.workspaces.map(workspace=><label className="test-confirm" key={workspace.id}><input type="checkbox" disabled={!workspace.write_enabled} checked={writes[client.id].includes(workspace.id)} onChange={event=>{setWrites(previous=>({...previous,[client.id]:event.target.checked?[...previous[client.id],workspace.id]:previous[client.id].filter(id=>id!==workspace.id)}));setConfig(null);}}/>{workspace.label}{!workspace.write_enabled?' · enable Workspace writes on Content first':''}</label>)}
+      </fieldset>
       <p className="field-hint">Selections affect the generated snippet and isolated tests only. They do not change an existing client's permissions.</p>
       <div className="workspace-actions"><button disabled={busy !== null} onClick={() => void generate(client.id)}>Generate configuration</button>
         <button disabled={busy !== null} onClick={() => void test(client.id, 'sdk')}>Test LV999 transport</button>
@@ -51,12 +56,14 @@ export function AIClients({ data }: { data: Snapshot }) {
         <p>{client.handshake.detail}</p><small>{new Date(client.handshake.checked_at).toLocaleString()} · {client.handshake.tool_count} tools discovered. Saved user configuration is unchanged.</small></div> : null}
     </section>)}
     {config ? <section className="generated-config" aria-label="Generated client configuration"><h2>{config.client === 'claude' ? 'Claude Code' : 'Codex'} configuration · {config.format}</h2>
-      <p>Merge only this LV999 entry into <span className="mono">{config.config_path}</span>. Keep existing settings and other MCP servers. Restart/reload the actual client afterwards.</p>
+      <p>Apply only the LV999 entry to <span className="mono">{config.config_path}</span>, or copy it for a manual merge. Close the native client before applying; restart/reload it afterwards. Existing files are backed up and unrelated settings are preserved.</p>
       <textarea aria-label="Generated configuration" readOnly value={config.text} spellCheck={false} rows={10} />
       <button onClick={() => {
         if (!navigator.clipboard) { setCopyMessage('Copy unavailable. Select the text above.'); return; }
         void navigator.clipboard.writeText(config.text).then(() => setCopyMessage('Configuration copied.'), () => setCopyMessage('Copy unavailable. Select the text above.'));
       }}>Copy configuration</button>
+      <button disabled={busy!==null} onClick={async()=>{setBusy(config.client);setFailure(null);try{const response=await previewClientConfig(config);if(response.ok)setPreview(response.data!);else setFailure(response.errors.join(' '));}catch{setFailure('Configuration preview unavailable. No file was changed.');}finally{setBusy(null);}}}>Preview application</button>
+      {preview?<div className="notice"><p>{preview.replaces_existing_entry?'Replace the existing LV999 entry':'Add the LV999 entry'} · {preview.config_path}. {preview.backup_required?'A backup will be created.':'No existing file.'}</p><button disabled={busy!==null} onClick={async()=>{setBusy(config.client);setFailure(null);try{const response=await applyClientConfig(preview.plan_id);if(response.ok){setCopyMessage(`Configuration applied. Reload the native client.${response.data!.backup_path?' Backup: '+response.data!.backup_path:''}`);setPreview(null);await detect();}else setFailure(response.errors.join(' '));}catch{setFailure('Application result unknown. Detect configuration before retrying.');}finally{setBusy(null);}}}>Apply reviewed LV999 entry</button></div>:null}
       {copyMessage ? <p role="status">{copyMessage}</p> : null}
     </section> : null}
   </>;

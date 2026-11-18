@@ -8,11 +8,13 @@ import { AIClients } from './screens/AIClients.js';
 import { Chats, type ChatSelection } from './screens/Chats.js';
 import { ProjectRouting } from './screens/ProjectRouting.js';
 import { NavIcon } from './components/NavIcon.js';
+import { Content } from './screens/Content.js';
 
 const pages = [
   ['Dashboard', '⌂', 'Your Notion connections, in one place.'],
   ['Workspaces', '▱', 'Separate connections. Verified identities.'],
   ['Routing', '⑂', 'One clear destination for every project.'],
+  ['Content', '▤', 'Create and edit content in an explicit test Workspace.'],
   ['Clients', '♧', 'Connect your AI tools to the same backend.'],
   ['Chats', '◇', 'Workspace groups and project conversations, together.'],
   ['Migration', '⇄', 'Move forward without losing the source.'],
@@ -43,6 +45,7 @@ export function App() {
       case 'Dashboard': content = <Dashboard data={data} navigate={setPage} />; break;
       case 'Workspaces': content = <Workspaces data={data} refresh={refresh} openChat={openChat} />; break;
       case 'Routing': content = <ProjectRouting data={data} refresh={refresh} openChat={openChat} />; break;
+      case 'Content': content = <Content data={data} refresh={refresh} />; break;
       case 'Clients': content = <AIClients data={data} />; break;
       case 'Chats': content = <Chats data={data} selection={chatSelection} onSelect={setChatSelection} />; break;
       case 'Migration': content = <MigrationManager data={data} />; break;

@@ -3,7 +3,7 @@ import { BindingInput, result, type AgentBinding, type WakeView, type ChatIdenti
 import { DomainError, safeError } from '../notion/adapter.js';
 import type { Store } from '../infra/store.js';
 export type BindingRow = { id:string; workspace_id:string; project_key:string; actor:'claude'|'codex'; model:string; effort:'low'|'medium'|'high'; enabled:number; paused:number;
-  status:AgentBinding['status']; native_session_id:string|null; revision:number; generation:number; active_wake_id:string|null; last_code:string|null; updated_at:string };
+  status:AgentBinding['status']; native_session_id:string|null; revision:number; generation:number; active_wake_id:string|null; last_code:string|null; updated_at:string;notion_tools:number };
 export class WakeStore {
   constructor(readonly store:Store) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS agent_bindings (
@@ -15,10 +15,11 @@ export class WakeStore {
         status TEXT NOT NULL,code TEXT,attempts INTEGER NOT NULL DEFAULT 0,nonce TEXT NOT NULL,lease_owner TEXT,lease_until INTEGER,generation INTEGER,
         created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(message_id,actor));
       CREATE INDEX IF NOT EXISTS wake_pending ON wake_requests(status,created_at);`);
+    if(!store.db.prepare('PRAGMA table_info(agent_bindings)').all().some(row=>row.name==='notion_tools'))store.db.exec('ALTER TABLE agent_bindings ADD COLUMN notion_tools INTEGER NOT NULL DEFAULT 0');
   }
   rows() { return this.store.db.prepare('SELECT * FROM agent_bindings ORDER BY workspace_id,project_key,actor').all() as unknown as BindingRow[]; }
   view(row:BindingRow):AgentBinding { return {id:row.id,workspace_id:row.workspace_id,project_key:row.project_key||null,actor:row.actor,model:row.model,effort:row.effort,
-    enabled:Boolean(row.enabled),paused:Boolean(row.paused),status:row.status,native_session_id:row.native_session_id,revision:row.revision,generation:row.generation,last_code:row.last_code,updated_at:row.updated_at,stopping:Boolean(row.paused&&row.active_wake_id)}; }
+    enabled:Boolean(row.enabled),paused:Boolean(row.paused),status:row.status,native_session_id:row.native_session_id,revision:row.revision,generation:row.generation,last_code:row.last_code,updated_at:row.updated_at,stopping:Boolean(row.paused&&row.active_wake_id),notion_tools:Boolean(row.notion_tools)}; }
   configure(input:unknown) {
     const parsed=BindingInput.safeParse(input);
     if(!parsed.success)return result<AgentBinding>(null,null,'INVALID_INPUT',['Select an exact group, model, effort and binding revision.']);
@@ -31,12 +32,13 @@ export class WakeStore {
         const old=this.rows().find(row=>row.workspace_id===value.workspace_id&&row.project_key===(value.project_key??'')&&row.actor===value.actor);
         if((old?.revision??0)!==value.expected_revision)throw new DomainError('BINDING_CONFLICT','Binding changed. Refresh and reopen agent settings.');
         if(old?.active_wake_id)throw new DomainError('SESSION_BUSY','Stop the active agent before changing its binding.');
-        const id=old?.id??randomUUID(), native=old?.model===value.model&&old.effort===value.effort?old.native_session_id:null;
+        const id=old?.id??randomUUID(), native=old?.model===value.model&&old.effort===value.effort&&Boolean(old.notion_tools)===value.notion_tools?old.native_session_id:null;
         this.store.db.prepare(`INSERT INTO agent_bindings(id,workspace_id,project_key,actor,model,effort,enabled,paused,status,native_session_id,revision,generation,updated_at)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET model=excluded.model,effort=excluded.effort,enabled=excluded.enabled,paused=excluded.paused,
           status=excluded.status,native_session_id=excluded.native_session_id,revision=excluded.revision,generation=excluded.generation,last_code=NULL,updated_at=excluded.updated_at`)
           .run(id,value.workspace_id,value.project_key??'',value.actor,value.model,value.effort,Number(value.enabled),Number(!value.enabled),value.enabled?'Idle':'Paused',native,
             (old?.revision??0)+1,(old?.generation??0)+1,new Date().toISOString());
+        this.store.db.prepare('UPDATE agent_bindings SET notion_tools=? WHERE id=?').run(Number(value.notion_tools),id);
         this.store.log({level:'info',action:`Agent ${value.actor} binding configured`,workspace_id:value.workspace_id,code:'OK'});
         this.store.db.exec('COMMIT');return result(this.view(this.rows().find(row=>row.id===id)!),value.workspace_id);
       }catch(error){this.store.db.exec('ROLLBACK');throw error;}

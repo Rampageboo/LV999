@@ -1,12 +1,15 @@
 import { Client, isNotionClientError } from '@notionhq/client';
 import { NOTION_VERSION, type ErrorCode } from '../../../../packages/contracts/src/index.js';
 import type { OAuthEvidence } from './oauth-credential.js';
+import { OfficialContentAdapter, type ContentAdapter } from './content-adapter.js';
+import { budgetedFetch } from './request-budget.js';
 
 export class DomainError extends Error {
   constructor(readonly code: ErrorCode, message: string) { super(message); }
 }
 export type Identity = { workspace_id: string; workspace_name: string; bot_id: string };
 export interface NotionAdapter {
+  content?: ContentAdapter;
   identity(): Promise<Identity>;
   search(query: string, cursor?: string, pagesOnly?: boolean): Promise<unknown>;
   page(id: string): Promise<unknown>;
@@ -14,9 +17,11 @@ export interface NotionAdapter {
 // Only explicitly allowed read endpoints are exposed. No arbitrary URLs or raw request method.
 export class OfficialNotionAdapter implements NotionAdapter {
   private client: Client;
-  constructor(secret: string, fetchImplementation?: typeof fetch, private oauth?: OAuthEvidence) {
+  readonly content: ContentAdapter;
+  constructor(secret: string, fetchImplementation?: typeof fetch, private oauth?: OAuthEvidence,gate?:()=>Promise<void>) {
     this.client = new Client({ auth: secret, notionVersion: NOTION_VERSION, timeoutMs: 15000, retry: false,
-      logLevel: undefined, logger: () => {}, ...(fetchImplementation ? { fetch: fetchImplementation } : {}) });
+      logLevel: undefined, logger: () => {}, fetch: budgetedFetch(async(input,init)=>{if(gate)await gate();return(fetchImplementation??fetch)(input,init);}) });
+    this.content = new OfficialContentAdapter(this.client);
   }
   async identity(): Promise<Identity> {
     const me = await this.client.users.me({});
@@ -48,6 +53,8 @@ export function safeError(error: unknown): DomainError {
       case 'restricted_resource': return new DomainError('FORBIDDEN', 'This connection lacks permission. Check its content capabilities and page sharing.');
       case 'object_not_found': return new DomainError('NOT_FOUND_OR_NOT_SHARED', 'The object does not exist or is not shared with this workspace connection. A 404 cannot distinguish these cases.');
       case 'rate_limited': return new DomainError('RATE_LIMITED', 'Notion rate limit reached. Wait before retrying.');
+      case 'validation_error': return new DomainError('INVALID_INPUT', 'Notion rejected these properties or content. Check the current schema and supported field types.');
+      case 'conflict_error': return new DomainError('CONTENT_CONFLICT', 'Notion reported a conflicting change. Reload the resource before editing.');
     }
   }
   return new DomainError('NETWORK_ERROR', 'Notion could not be reached. Check network access and retry; no content was changed.');

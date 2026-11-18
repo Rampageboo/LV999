@@ -51,7 +51,7 @@ export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refres
     {data.workspaces.length ? <div className="workspace-list">{data.workspaces.map(w => <section key={w.id} className="workspace">
       <div className="list-row"><h2>{w.label}</h2><Status value={w.status} /></div>
       <dl><dt>Notion workspace</dt><dd>{w.verified_name ?? 'Not verified'}</dd><dt>Workspace ID</dt><dd className="mono">{w.id}</dd>
-        <dt>Environment</dt><dd>Test · read-only</dd><dt>Last verification</dt><dd>{w.checked_at ? new Date(w.checked_at).toLocaleString() : 'Never'}</dd>
+        <dt>Environment</dt><dd>{w.write_enabled?'Test · writes enabled':'Test · read-only'}</dd><dt>Last verification</dt><dd>{w.checked_at ? new Date(w.checked_at).toLocaleString() : 'Never'}</dd>
         <dt>Read-access check</dt><dd>{w.read_access ? `${w.read_access.sampled_objects} shared objects in the first search batch${w.read_access.has_more ? ' · more available' : ''}. Checked ${new Date(w.read_access.checked_at).toLocaleString()}.` : 'Not verified. Use Verify connection to check identity and read access.'}</dd></dl>
       {w.read_access?.sampled_objects === 0 ? <p className="hint">No shared objects were found at the last connection check. Share a test root page with this connection; search indexing may take time. This is not a full workspace inventory.</p> : null}
       {w.message ? <p className="notice">{w.code}: {w.message}</p> : null}
