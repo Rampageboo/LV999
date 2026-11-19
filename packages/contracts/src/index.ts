@@ -123,11 +123,12 @@ export type WorkspaceView = WorkspaceConfig & {
 };
 export type Diagnostic = { key: string; label: string; status: 'pass' | 'pending' | 'error'; detail: string };
 export type Activity = { time: string; level: 'info' | 'error'; action: string; workspace_id: string | null; code: ErrorCode };
+export type MigrationSnapshotView={id:string;project_key:string;source_workspace_id:string;target_workspace_id:string;root_page_id:string;route_revision:number;captured_at:string;snapshot_sha256:string;backup_verified:true;status:'Needs review'|'Route changed';route_current:boolean;can_execute:false;counts:{pages:number;blocks:number;databases:number;data_sources:number;records:number;issues:number;releases:number;files:number;views:number};warnings:string[]};
 export type Snapshot = {
   app_version: string; app_id: string; captured_at: string;
   backend: { status: 'Running'; pid: number; node: string; executable: string; transport: 'Private stdio'; started_at: string };
   diagnostics: Diagnostic[]; workspaces: WorkspaceView[]; activity: Activity[];
-  projects: ProjectRoute[]; clients: ClientView[]; jobs: [];
+  projects: ProjectRoute[]; clients: ClientView[]; jobs: MigrationSnapshotView[];
   settings: { read_only: boolean; remote_enabled: false; autostart: false; api_version: string; data_dir: string; updater_configured: boolean };
   capabilities: { connect_in_gui: boolean; browse_pages: boolean; routing: boolean; client_config: boolean; group_chat: boolean; auto_wake: boolean; migration: false; content_write: boolean };
 };

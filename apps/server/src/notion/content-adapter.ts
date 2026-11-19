@@ -6,6 +6,8 @@ import { DomainError } from './adapter.js';
 export interface ContentAdapter {
   resource(kind:'page'|'block'|'database'|'data_source'|'view'|'upload',id:string):Promise<any>;
   children(id:string,cursor?:string):Promise<any>;
+  comments?(id:string,cursor?:string):Promise<any>;
+  property?(pageId:string,propertyId:string,cursor?:string):Promise<any>;
   read(input:ContentRead):Promise<unknown>;
   apply(op:MutationOp,known:(result:MutationResult)=>void,resource?:any):Promise<MutationResult>;
   verify(op:MutationOp,result:MutationResult):Promise<MutationResult>;
@@ -50,6 +52,8 @@ export class OfficialContentAdapter implements ContentAdapter {
     if(value?.id?.toLowerCase()!==id.toLowerCase())throw new DomainError('INVALID_RESPONSE','Notion returned a different resource ID.');return value;
   }
   children(id:string,cursor?:string){return this.client.blocks.children.list({block_id:id,page_size:100,start_cursor:cursor});}
+  comments(id:string,cursor?:string){return this.client.comments.list({block_id:id,page_size:100,start_cursor:cursor});}
+  property(pageId:string,propertyId:string,cursor?:string){return this.client.pages.properties.retrieve({page_id:pageId,property_id:propertyId,page_size:100,start_cursor:cursor});}
   async read(input:ContentRead){
     const id=input.resource_id;
     if(input.kind==='databases')return this.client.search({page_size:50,start_cursor:input.start_cursor,filter:{property:'object',value:'data_source'}});

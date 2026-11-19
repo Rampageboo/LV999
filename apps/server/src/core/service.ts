@@ -18,6 +18,7 @@ import { ContentService } from './content-service.js';
 import { notionRequestSignal } from '../notion/request-budget.js';
 import {MessageBoards} from './boards.js';
 import type {SourceReadAccess} from './source-reader.js';
+import {MigrationSnapshots} from './migration-snapshots.js';
 
 export class Service {
   readonly started = new Date().toISOString();
@@ -28,6 +29,7 @@ export class Service {
   readonly oauth: NotionOAuth;
   readonly content: ContentService;
   readonly boards:MessageBoards;
+  readonly migrations:MigrationSnapshots;
   private makeAdapter:(token:string,oauth?:OAuthEvidence)=>NotionAdapter;
   constructor(readonly store: Store, private vault: Vault,
     makeAdapter?: (token: string, oauth?: OAuthEvidence) => NotionAdapter,
@@ -39,13 +41,14 @@ export class Service {
     this.oauth = new NotionOAuth(store, vault, (credential, input) => this.connectOAuth(credential, input), local?.oauth, local?.oauthPort, local?.oauthTtlMs);
     this.content = new ContentService(store,id=>this.verifiedAdapter(id));
     this.boards=new MessageBoards(store,this.content);
+    this.migrations=new MigrationSnapshots(store,vault);
   }
   detectClients() { return this.clients.detect(); }
   async sourceReader(workspaceId:string):Promise<SourceReadAccess>{
     if(this.store.list().find(w=>w.id===workspaceId)?.access_role!=='source')throw new DomainError('CONTENT_ACCESS_DENIED','Select an explicit read-only source connection.');
     const {adapter}=await this.verifiedAdapter(workspaceId);if(!adapter.content)throw new DomainError('INVALID_RESPONSE','Source content reader is unavailable.');
     const content=adapter.content;
-    return Object.freeze({resource:content.resource.bind(content),children:content.children.bind(content),read:content.read.bind(content)});
+    return Object.freeze({resource:content.resource.bind(content),children:content.children.bind(content),read:content.read.bind(content),...(content.comments?{comments:content.comments.bind(content)}:{}),...(content.property?{property:content.property.bind(content)}:{})});
   }
   generateClientConfig(input: unknown) { return this.clients.generate(input); }
   previewClientConfig(input:unknown){return this.clients.previewApply(input);}
@@ -358,7 +361,7 @@ export class Service {
       ],
       workspaces, activity: this.store.activity(), projects: this.store.projects(),
       clients: this.clients.snapshot(),
-      jobs: [], settings: { read_only: !workspaces.some(w=>w.write_enabled||w.board_append_projects.length), remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
+      jobs: this.migrations.list(), settings: { read_only: !workspaces.some(w=>w.write_enabled||w.board_append_projects.length), remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
         data_dir: this.store.directory, updater_configured: false },
       capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: true, group_chat: true, auto_wake: true, migration: false, content_write: true },
     };
