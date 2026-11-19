@@ -22,6 +22,7 @@ function writableBlock(block:any):any{
   const body={...block[block.type]};
   // Current read responses include paragraph.icon=null; the create API expects omission for no icon.
   if(block.type==='paragraph'&&body.icon===null)delete body.icon;
+  if(block.type==='numbered_list_item'&&body.list_format==='numbers')delete body.list_format;
   if(Array.isArray(body.children))body.children=body.children.map(writableBlock);
   return{...block,[block.type]:body};
 }
