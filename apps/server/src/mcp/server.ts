@@ -13,17 +13,17 @@ export function createMcpServer(service: Service, identity?: ChatIdentity, write
   const reply = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }],
     isError: typeof value === 'object' && value !== null && 'ok' in value && value.ok === false });
   server.registerTool('list_workspaces', {
-    description: 'List registered test workspaces and last verification evidence; never returns credentials.', inputSchema: z.object({}).strict(),
+    description: 'List registered Workspaces and last verification evidence; never returns credentials.', inputSchema: z.object({}).strict(),
   }, async () => reply(result(service.snapshot().workspaces.filter(w=>allowed(w.id)))));
   server.registerTool('verify_workspace', {
-    description: 'Read the token identity from Notion and compare it to this exact registered test workspace.', inputSchema: WorkspaceRef,
+    description: 'Read the token identity from Notion and compare it to this exact registered Workspace.', inputSchema: WorkspaceRef,
   }, async ({ workspace_id }) => reply(allowed(workspace_id)?await service.verify(workspace_id):denied()));
   server.registerTool('search_workspace', {
-    description: 'Read-only search in one identity-verified test workspace. Pass next_cursor to paginate.',
+    description: 'Read-only search in one identity-verified Workspace. Pass next_cursor to paginate.',
     inputSchema: WorkspaceRef.extend({ query: z.string().max(500).default(''), start_cursor: z.string().max(200).optional() }),
   }, async ({ workspace_id, query, start_cursor }) => reply(allowed(workspace_id)?await service.search(workspace_id, query, start_cursor):denied()));
   server.registerTool('get_page', {
-    description: 'Read a page in an identity-verified test workspace. 404 may mean missing or not shared.',
+    description: 'Read a page in an identity-verified Workspace. 404 may mean missing or not shared.',
     inputSchema: WorkspaceRef.extend({ page_id: z.uuid() }),
   }, async ({ workspace_id, page_id }) => reply(allowed(workspace_id)?await service.page(workspace_id, page_id):denied()));
   server.registerTool('list_projects', {
@@ -35,14 +35,14 @@ export function createMcpServer(service: Service, identity?: ChatIdentity, write
     const routes=service.store.projects().filter(p=>input.project_key?p.project_key===input.project_key:projectNameLookup(p.name)===projectNameLookup(input.name!));
     return reply(routes.some(p=>!allowed(p.workspace_id))?denied():await service.resolveProject(input));
   });
-  server.registerTool('search_all',{description:'Search all authorized test Workspaces separately; failures retain their exact source. No write or Workspace guessing.',inputSchema:z.object({query:z.string().max(500).default('')}).strict()},async({query})=>reply(result(await Promise.all(service.store.list().filter(w=>allowed(w.id)).map(w=>service.search(w.id,query))))));
+  server.registerTool('search_all',{description:'Search all authorized Workspaces separately; failures retain their exact source. No write or Workspace guessing.',inputSchema:z.object({query:z.string().max(500).default('')}).strict()},async({query})=>reply(result(await Promise.all(service.store.list().filter(w=>allowed(w.id)).map(w=>service.search(w.id,query))))));
   const readTools={get_page_tree:'page_tree',get_block_children:'block_children',get_database_schema:'database',get_data_source:'data_source',query_data_source:'query',list_databases:'databases',get_page_markdown:'markdown',list_views:'views'} as const;
-  for(const [name,kind]of Object.entries(readTools))server.registerTool(name,{description:`Read-only ${kind} in one explicit identity-verified test Workspace. Cursor/depth limits report incomplete results.`,inputSchema:ContentReadInput.omit({kind:true})},async input=>reply(allowed(input.workspace_id)?await service.content.read({...input,kind}):denied()));
+  for(const [name,kind]of Object.entries(readTools))server.registerTool(name,{description:`Read-only ${kind} in one explicit identity-verified Workspace. Cursor/depth limits report incomplete results.`,inputSchema:ContentReadInput.omit({kind:true})},async input=>reply(allowed(input.workspace_id)?await service.content.read({...input,kind}):denied()));
   for(const option of ContentOperation.options){
     const schema=option as z.ZodObject<any>;
     const kind=option.shape.kind.value;
     const fields=schema.omit({kind:true}).extend({target:ContentTarget,idempotency_key:z.uuid(),approval:ExecuteMutationInput.shape.approval});
-    server.registerTool(kind,{description:`${kind} in a write-enabled test Workspace or exact current project route. Requires startup --write-workspace permission. Use one UUID retry key per request and reuse it on uncertain responses. Trash/delete/schema edits require prepare_mutation and one-use Owner approval in GUI. Deletion moves to recoverable trash, never permanent deletion.`,inputSchema:fields},async (input:any)=>{
+    server.registerTool(kind,{description:`${kind} in a write-enabled Workspace or exact current project route. Requires startup --write-workspace permission. Use one UUID retry key per request and reuse it on uncertain responses. Trash/delete/schema edits require prepare_mutation and one-use Owner approval in GUI. Deletion moves to recoverable trash, never permanent deletion.`,inputSchema:fields},async (input:any)=>{
       const {target,idempotency_key,approval,...operation}=input as any;
       const request={target,idempotency_key,operation:{...operation,kind}};
       if(['trash_page','restore_page','delete_block','update_data_source'].includes(kind)&&!approval){const plan=await service.content.prepare(request,caller);plan.requires_approval=plan.ok;return reply(plan);}

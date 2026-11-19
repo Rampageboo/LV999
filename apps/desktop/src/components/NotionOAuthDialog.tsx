@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { OAuthStatus, WorkspaceView } from '../../../../packages/contracts/src/index.js';
+import type { OAuthStatus, WorkspaceView,WorkspaceEnvironmentId } from '../../../../packages/contracts/src/index.js';
 import { oauthStatus, configureOAuth, startOAuth, cancelOAuth, openNotionAuthorization } from '../ipc/backend.js';
 
 export function NotionOAuthDialog({ workspace, onClose, onConnected }: { workspace?: WorkspaceView; onClose: () => void; onConnected: () => Promise<void> }) {
@@ -8,6 +8,7 @@ export function NotionOAuthDialog({ workspace, onClose, onConnected }: { workspa
   const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null), [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
   const notified = useRef(false);
+  const [environment,setEnvironment]=useState<WorkspaceEnvironmentId>(workspace?.environment??'production');
   const active = status?.phase === 'awaiting' || status?.phase === 'exchanging';
   useEffect(() => {
     dialog.current?.showModal(); let alive = true;
@@ -35,7 +36,7 @@ export function NotionOAuthDialog({ workspace, onClose, onConnected }: { workspa
     event.preventDefault(); const form = event.currentTarget; setBusy(true); setFailure(null); notified.current = false;
     try {
       const reply = await startOAuth({ label: (form.elements.namedItem('oauth_label') as HTMLInputElement | null)?.value ?? '',
-        environment: 'test', ...(workspace ? { workspace_id: workspace.id } : {}) });
+        environment, ...(environment==='production'?{expected_workspace_name:(form.elements.namedItem('expected_workspace_name') as HTMLInputElement).value.trim()}:{}), ...(workspace ? { workspace_id: workspace.id } : {}) });
       if (!reply.ok) { setFailure(`${reply.code}: ${reply.errors.join(' ')}`); return; }
       const url = reply.data!.authorization_url; setAuthorizationUrl(url); setStatus((await oauthStatus()).data);
       await openNotionAuthorization(url);
@@ -50,7 +51,7 @@ export function NotionOAuthDialog({ workspace, onClose, onConnected }: { workspa
   }
   return <dialog ref={dialog} className="connection-dialog" aria-labelledby="oauth-title" onCancel={event => { event.preventDefault(); void close(); }}>
     <h2 id="oauth-title">{workspace ? `Reauthorize ${workspace.label} with Notion` : 'Connect with Notion'}</h2>
-    <p>One OAuth app can connect multiple Workspaces. Authorize each test Workspace separately and choose the pages it can access.</p>
+    <p>One OAuth app can connect multiple Workspaces. Authorize each separately and choose its accessible pages. Production targets start read-only in LV999, regardless of the OAuth app's capabilities.</p>
     {!status ? <p role="status">Loading OAuth settings…</p> : <>
       <p className="field-hint">In the Notion Developer portal, use this exact redirect URI:</p><p className="mono oauth-callback">{status.redirect_uri}</p>
       {!status.configured || editing ? <form onSubmit={save} autoComplete="off" className="oauth-settings">
@@ -61,8 +62,10 @@ export function NotionOAuthDialog({ workspace, onClose, onConnected }: { workspa
         <button type="submit" disabled={busy || active}>Save OAuth settings</button>
       </form> : <p className="field-hint">OAuth app configured. <button className="text-button" disabled={busy || active} onClick={() => setEditing(true)}>Edit OAuth app</button></p>}
       {status.configured ? <form onSubmit={authorize} autoComplete="off">
+        <label className="form-field">Environment<select aria-label="OAuth environment" value={environment} disabled={busy||active||Boolean(workspace)} onChange={e=>setEnvironment(e.target.value as WorkspaceEnvironmentId)}><option value="production">Production target</option><option value="test">Test</option></select></label>
+        {environment==='production'?<label className="form-field">Expected Notion Workspace name<input name="expected_workspace_name" required maxLength={200} defaultValue={workspace?.verified_name??''} disabled={busy||active}/></label>:null}
         {workspace ? <p>Choose this exact Workspace in Notion. A different Workspace will be rejected.</p> : <label className="form-field">Display name <span className="field-hint">Optional · defaults to the Notion workspace name</span><input name="oauth_label" maxLength={80} disabled={busy || active} /></label>}
-        <label className="test-confirm"><input name="oauth_test_confirm" type="checkbox" required disabled={busy || active} /><span>This is a test Workspace. It is not Vibecode or Honour.</span></label>
+        <label className="test-confirm"><input name="oauth_test_confirm" type="checkbox" required disabled={busy || active} /><span>{environment==='test'?'This is a test Workspace. It is not Vibecode or Honour.':'This is an authorized production target. Connect read-only; Vibecode and Honour remain protected.'}</span></label>
         <button className="primary" type="submit" disabled={busy || active || editing}>{active ? 'Authorization in progress…' : 'Authorize workspace in Notion'}</button>
       </form> : null}
       {status.phase === 'awaiting' ? <p role="status">Choose a Workspace and pages in your browser, then allow access. This request expires in 10 minutes.</p> : null}

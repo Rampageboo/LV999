@@ -38,7 +38,7 @@ if (mode === 'management') {
   try {
     const command = args[0] ?? 'status';
     if (command === 'register') {
-      store.add(WorkspaceInput.parse({ id: flag('--workspace-id')?.toLowerCase(), label: flag('--label'), environment: args.includes('--test') ? 'test' : undefined }));
+      store.add(WorkspaceInput.parse({ id: flag('--workspace-id')?.toLowerCase(), label: flag('--label'), environment: flag('--environment')??(args.includes('--test') ? 'test' : undefined) }));
       console.log(JSON.stringify(result({ status: 'Configured', note: 'Run verify after secure token enrollment.' })));
     } else if (command === 'verify') {
       const { workspace_id } = WorkspaceRef.parse({ workspace_id: flag('--workspace-id')?.toLowerCase() });

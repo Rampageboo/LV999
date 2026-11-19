@@ -38,7 +38,7 @@ export function ProjectRouting({ data, refresh, openChat }: { data: Snapshot; re
   return <>
     <div className="section-toolbar"><p>Each key selects one workspace and one root page. Stored mappings are configuration; use Check route for a fresh access check.</p>
       <button className="primary" disabled={busy || !data.capabilities.routing || !data.workspaces.length} onClick={() => open()}>Add mapping</button></div>
-    {!data.workspaces.length ? <p className="hint">Connect a test workspace before adding a mapping.</p> : null}
+    {!data.workspaces.length ? <p className="hint">Connect a Workspace before adding a mapping.</p> : null}
     {notice ? <p role="status" className="notice">{notice}</p> : null}
     {resolved ? <section className="route-target" aria-label="Resolved route"><h3>{resolved.project_key} → {resolved.root_page.title}</h3>
       <p>{data.workspaces.find(w => w.id === resolved.workspace_id)?.label} · {resolved.name}</p><p className="mono">Workspace: {resolved.workspace_id}<br />Page: {resolved.root_page.id}</p>

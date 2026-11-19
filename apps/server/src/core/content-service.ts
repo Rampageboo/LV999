@@ -24,11 +24,13 @@ export class ContentService {
   enabled(id:string){return this.store.db.prepare('SELECT enabled FROM workspace_write_policy WHERE workspace_id=?').get(id)?.enabled===1;}
   private fail<T>(error:unknown,id:string|null=null):Result<T>{const safe=safeError(error);return result<T>(null,id,safe.code,[safe.message]);}
   async setEnabled(input:unknown){
-    const parsed=z.object({workspace_id:z.uuid(),enabled:z.boolean()}).strict().safeParse(input);
-    if(!parsed.success)return this.fail(new DomainError('INVALID_INPUT','Select an exact test Workspace.'));
+    const parsed=z.object({workspace_id:z.uuid(),enabled:z.boolean(),confirm_workspace_id:z.uuid().optional()}).strict().safeParse(input);
+    if(!parsed.success)return this.fail(new DomainError('INVALID_INPUT','Select an exact Workspace.'));
     const {workspace_id:id,enabled}=parsed.data;
-    try{await this.access(id);this.store.db.prepare('INSERT INTO workspace_write_policy(workspace_id,enabled) VALUES(?,?) ON CONFLICT(workspace_id) DO UPDATE SET enabled=excluded.enabled').run(id,Number(enabled));
-      this.store.log({level:'info',action:enabled?'Test Workspace writes enabled':'Workspace writes disabled',workspace_id:id,code:'OK'});return result({enabled},id);
+    try{const workspace=this.store.list().find(w=>w.id===id);if(!workspace)throw new DomainError('UNKNOWN_WORKSPACE','Select a registered Workspace.');
+      if(enabled){if(workspace.environment==='production'&&parsed.data.confirm_workspace_id!==id)throw new DomainError('APPROVAL_REQUIRED','Confirm this exact production Workspace ID before enabling content writes.');await this.access(id);}
+      this.store.db.prepare('INSERT INTO workspace_write_policy(workspace_id,enabled) VALUES(?,?) ON CONFLICT(workspace_id) DO UPDATE SET enabled=excluded.enabled').run(id,Number(enabled));
+      this.store.log({level:'info',action:enabled?`${workspace.environment==='production'?'Production':'Test'} Workspace writes enabled`:'Workspace writes disabled',workspace_id:id,code:'OK'});return result({enabled},id);
     }catch(error){return this.fail(error,id);}
   }
   private target(input:Mutation['target']):Target {
@@ -41,7 +43,7 @@ export class ContentService {
   private permission(target:Target,caller:ContentCaller){
     if(caller.project_keys&&(!target.projectKey||!caller.project_keys.includes(target.projectKey)))throw new DomainError('WRITE_ACCESS_DENIED','This session can write only through its bound project route.');
     if(caller.write_workspace_ids!=='owner'&&!caller.write_workspace_ids.includes(target.workspaceId))throw new DomainError('WRITE_ACCESS_DENIED','This client was not granted write access to that Workspace. Regenerate its scoped configuration.');
-    if(!this.enabled(target.workspaceId))throw new DomainError('WRITE_DISABLED','Enable writes for this test Workspace in LV999 first.');
+    if(!this.enabled(target.workspaceId))throw new DomainError('WRITE_DISABLED','Enable writes for this exact Workspace in LV999 first. Production targets require explicit confirmation.');
   }
   private routeCurrent(target:Target){if(target.projectKey&&this.store.projects().find(p=>p.project_key===target.projectKey)?.revision!==target.routeRevision)throw new DomainError('ROUTE_CONFLICT','The project route changed during validation; nothing was written.');}
   private async pageScope(adapter:ContentAdapter,page:any,root:string|null){
@@ -120,7 +122,7 @@ export class ContentService {
     const destructive=['trash_page','restore_page','delete_block','update_data_source'].includes(request.operation.kind);
     const plan:MutationPlan={id:randomUUID(),hash:hash({request,actor:caller.actor,target}),workspace_id:target.workspaceId,project_key:target.projectKey,operation:request.operation.kind,resource_id:resource.id,
       title:typeof resource.title==='string'?resource.title:resource.properties?Object.values(resource.properties).filter((p:any)=>p.type==='title').flatMap((p:any)=>p.title??[]).map((p:any)=>p.plain_text??p.text?.content??'').join('').slice(0,200):request.operation.kind,
-      version:resource.last_edited_time??null,destructive,expires_at:new Date(Date.now()+300000).toISOString(),summary:`${request.operation.kind} · ${request.operation.kind==='update_data_source'?'schema fields: '+Object.keys(request.operation.properties).join(', '):destructive?'entire target and its child content':'exact test Workspace'} · ${destructive?'one-use approval required':'write'}`};
+      version:resource.last_edited_time??null,destructive,expires_at:new Date(Date.now()+300000).toISOString(),summary:`${request.operation.kind} · ${request.operation.kind==='update_data_source'?'schema fields: '+Object.keys(request.operation.properties).join(', '):destructive?'entire target and its child content':'exact Workspace'} · ${destructive?'one-use approval required':'write'}`};
     return{target,adapter,resource,plan};
   }
   approve(input:unknown){

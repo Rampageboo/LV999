@@ -1,12 +1,12 @@
 import { createServer, type Server } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { OAuthConfigInput, OAuthStartInput, result, type OAuthStatus, type Result, type WorkspaceView } from '../../../../packages/contracts/src/index.js';
+import { OAuthConfigInput, OAuthStartInput,isProtectedWorkspaceName, result, type OAuthStatus, type Result, type WorkspaceView,type WorkspaceEnvironmentId } from '../../../../packages/contracts/src/index.js';
 import { DomainError, safeError } from '../notion/adapter.js';
 import { OfficialOAuthExchange, type OAuthCredential, type OAuthExchange } from '../notion/oauth-credential.js';
 import type { Store } from '../infra/store.js';
 import type { Vault } from '../infra/vault.js';
 
-type Start = { label: string; environment: 'test'; workspace_id?: string };
+type Start = { label: string; environment: WorkspaceEnvironmentId; workspace_id?: string;expected_workspace_name?:string };
 export class NotionOAuth {
   private server: Server | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -61,14 +61,17 @@ export class NotionOAuth {
   async start(input: unknown): Promise<Result<{ authorization_url: string }>> {
     try {
       const parsed = OAuthStartInput.safeParse(input);
-      if (!parsed.success) throw new DomainError('INVALID_INPUT', 'Confirm a test workspace before authorizing.');
+      if (!parsed.success) throw new DomainError('INVALID_INPUT', 'Confirm a Workspace before authorizing.');
+      if(parsed.data.environment==='production'&&!parsed.data.expected_workspace_name)throw new DomainError('INVALID_INPUT','Enter the exact Notion Workspace name for this production target.');
+      if(isProtectedWorkspaceName(parsed.data.label)||isProtectedWorkspaceName(parsed.data.expected_workspace_name??''))throw new DomainError('PROTECTED_WORKSPACE','Vibecode and Honour remain protected; do not authorize them in this workflow.');
       if (this.phase === 'awaiting' || this.phase === 'exchanging') throw new DomainError('CONNECTION_BUSY', 'An authorization is already in progress.');
       const clientId = this.clientId();
       if (!clientId) throw new DomainError('AUTH_REQUIRED', 'Save your Notion OAuth app settings first.');
       const secret = await this.vault.read(`oauth-client/${clientId}`);
       if (!secret) throw new DomainError('AUTH_REQUIRED', 'The OAuth client secret is missing from Windows Credential Manager.');
       if (parsed.data.workspace_id && !this.store.list().some(w => w.id === parsed.data.workspace_id))
-        throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered test workspace to reauthorize.');
+        throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered Workspace to reauthorize.');
+      if(parsed.data.workspace_id&&this.store.list().find(w=>w.id===parsed.data.workspace_id)?.environment!==parsed.data.environment)throw new DomainError('WORKSPACE_MISMATCH','Reauthorization cannot change the registered environment.');
       const state = randomBytes(32).toString('base64url');
       this.phase = 'awaiting'; this.outcome = null;
       const server = createServer((request, response) => {

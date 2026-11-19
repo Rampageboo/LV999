@@ -6,14 +6,14 @@ import type { AgentBinding, WakeView } from '../../../../packages/contracts/src/
 import type { OAuthStatus } from '../../../../packages/contracts/src/index.js';
 import type { ContentRead,Mutation,MutationPlan,MutationResult } from '../../../../packages/contracts/src/content.js';
 export const readContent=(input:ContentRead)=>invoke<Result<any>>('content_request',{method:'content_read',input});
-export const setWorkspaceWrites=(workspaceId:string,enabled:boolean)=>invoke<Result<{enabled:boolean}>>('content_request',{method:'set_workspace_writes',input:{workspace_id:workspaceId,enabled}});
+export const setWorkspaceWrites=(workspaceId:string,enabled:boolean,confirmedWorkspaceId?:string)=>invoke<Result<{enabled:boolean}>>('content_request',{method:'set_workspace_writes',input:{workspace_id:workspaceId,enabled,...(confirmedWorkspaceId?{confirm_workspace_id:confirmedWorkspaceId}:{})}});
 export const prepareMutation=(input:Mutation)=>invoke<Result<MutationPlan>>('content_request',{method:'prepare_mutation',input});
 export const approveMutation=(plan:MutationPlan)=>invoke<Result<{plan_id:string;plan_hash:string}>>('content_request',{method:'approve_mutation',input:{plan_id:plan.id,plan_hash:plan.hash,confirm:true}});
 export const executeMutation=(input:Mutation&{approval?:{plan_id:string;plan_hash:string}})=>invoke<Result<MutationResult>>('content_request',{method:'execute_mutation',input});
 export const pendingMutations=()=>invoke<Result<{plans:(MutationPlan&{actor:string})[];operations:any[]}>>('content_request',{method:'pending_mutations',input:{}});
 export const oauthStatus = () => invoke<Result<OAuthStatus>>('oauth_request', { method: 'oauth_status', input: {} });
 export const configureOAuth = (input: { client_id: string; client_secret?: string }) => invoke<Result<OAuthStatus>>('oauth_request', { method: 'configure_oauth', input });
-export const startOAuth = (input: { label: string; environment: 'test'; workspace_id?: string }) => invoke<Result<{authorization_url:string}>>('oauth_request', { method: 'start_oauth', input });
+export const startOAuth = (input: { label: string; environment: 'test'|'production'; workspace_id?: string;expected_workspace_name?:string }) => invoke<Result<{authorization_url:string}>>('oauth_request', { method: 'start_oauth', input });
 export const cancelOAuth = () => invoke<Result<OAuthStatus>>('oauth_request', { method: 'cancel_oauth', input: {} });
 export const refreshOAuth = (workspaceId: string) => invoke<Result<WorkspaceView>>('oauth_request', { method: 'refresh_oauth', input: { workspace_id: workspaceId } });
 export const openNotionAuthorization = (url: string) => invoke<void>('open_notion_authorization', { url });

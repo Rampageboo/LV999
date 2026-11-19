@@ -73,14 +73,22 @@ describe('workspace isolation and truthful state', () => {
   it.each(['Vibecode', 'Honour'])('blocks production identity %s before content access', async name => {
     const f = fixture(); const adapter = f.adapters.get(f.secrets.get(f.a)!)!;
     adapter.identity = async () => ({ workspace_id: f.a, workspace_name: name, bot_id: randomUUID() });
-    expect((await f.service.search(f.a, '')).code).toBe('TEST_WORKSPACE_ONLY');
+    expect((await f.service.search(f.a, '')).code).toBe('PROTECTED_WORKSPACE');
     expect(adapter.search).not.toHaveBeenCalled();
   });
   it.each(['Vibecode', 'Honour'])('refuses production registration %s', label => {
-    const f = fixture(); expect(() => f.store.add({ id: randomUUID(), label, environment: 'test' })).toThrow('TEST_WORKSPACE_ONLY');
+    const f = fixture(); expect(() => f.store.add({ id: randomUUID(), label, environment: 'test' })).toThrow('PROTECTED_WORKSPACE');
   });
-  it('does not accept non-test or credential-bearing registry input', () => {
-    expect(WorkspaceInput.safeParse({ id: randomUUID(), label: 'Example', environment: 'production' }).success).toBe(false);
+  it('remembers a protected Workspace ID even when it is renamed later',async()=>{
+    const f=fixture(),adapter=f.adapters.get(f.secrets.get(f.a)!)!;
+    adapter.identity=async()=>({workspace_id:f.a,workspace_name:'  Ｖｉｂｅｃｏｄｅ  ',bot_id:randomUUID()});
+    expect((await f.service.search(f.a,'')).code).toBe('PROTECTED_WORKSPACE');
+    adapter.identity=async()=>({workspace_id:f.a,workspace_name:'Renamed source',bot_id:randomUUID()});f.vault.read.mockClear();
+    expect((await f.service.search(f.a,'')).code).toBe('PROTECTED_WORKSPACE');expect(f.vault.read).not.toHaveBeenCalled();expect(adapter.search).not.toHaveBeenCalled();
+  });
+  it('accepts explicit production metadata but rejects unknown environments or credential-bearing registry input', () => {
+    expect(WorkspaceInput.safeParse({ id: randomUUID(), label: 'Example', environment: 'production' }).success).toBe(true);
+    expect(WorkspaceInput.safeParse({ id: randomUUID(), label: 'Example', environment: 'other' }).success).toBe(false);
     expect(WorkspaceInput.safeParse({ id: randomUUID(), label: 'Example', environment: 'test', token: randomUUID() }).success).toBe(false);
   });
   it('keeps tokens and untrusted error bodies out of snapshots, audit and SQLite', async () => {

@@ -70,6 +70,21 @@ it('one OAuth app connects two Workspaces with separate atomic vault credentials
     for (const file of ['registry.db', 'registry.db-wal']) expect(readFileSync(join(f.directory, file)).includes(Buffer.from(secret))).toBe(false);
   }
 });
+it('connects explicit production targets read-only and creates groups without waking native clients',async()=>{
+  const f=await fixture(),a=f.grant('Target Alpha'),b=f.grant('Target Beta');
+  for(const item of[a,b]){const url=await f.start({environment:'production',expected_workspace_name:item.value.identity.workspace_name});await f.callback(url.searchParams.get('state'),item.code);await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));}
+  expect(f.store.list().every(w=>w.environment==='production')).toBe(true);expect(f.service.snapshot().workspaces.every(w=>w.write_enabled===false)).toBe(true);
+  expect(f.service.chatOverview().data!.workspaces).toHaveLength(2);expect(f.service.messages.wakes.rows()).toHaveLength(0);
+});
+it('rejects missing/mismatched production names and environment changes before content or credential writes',async()=>{
+  const f=await fixture(),a=f.grant('Target Alpha');
+  expect((await f.service.oauth.start({environment:'production'})).code).toBe('INVALID_INPUT');
+  expect((await f.service.oauth.start({environment:'production',expected_workspace_name:'Honour'})).code).toBe('PROTECTED_WORKSPACE');
+  let url=await f.start({environment:'production',expected_workspace_name:'Different target'});await f.callback(url.searchParams.get('state'),a.code);await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('failed'));
+  expect(f.service.oauth.status().outcome!.code).toBe('WORKSPACE_MISMATCH');expect(f.content).not.toHaveBeenCalled();expect(f.vault.write).toHaveBeenCalledTimes(1);expect(f.store.list()).toHaveLength(0);
+  url=await f.start({environment:'production',expected_workspace_name:'Target Alpha'});await f.callback(url.searchParams.get('state'),a.code);await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));
+  expect((await f.service.oauth.start({environment:'test',workspace_id:a.value.identity.workspace_id})).code).toBe('WORKSPACE_MISMATCH');
+});
 it('rejects missing, wrong, duplicate and non-ASCII state without consuming the valid authorization', async () => {
   const f = await fixture(), a = f.grant(), url = await f.start(), state = url.searchParams.get('state')!;
   for (const bad of [null, randomUUID(), 'é'.repeat(43)]) expect((await f.callback(bad, a.code)).status).toBe(400);
@@ -146,7 +161,7 @@ it('rejects production, unexpected identity and wrong reauthorization target bef
   await f.callback(url.searchParams.get('state'), wrong.code); await vi.waitFor(() => expect(f.service.oauth.status().phase).toBe('failed'));
   expect(f.service.oauth.status().outcome!.code).toBe('WORKSPACE_MISMATCH'); expect(f.content).not.toHaveBeenCalled();
   const production = f.grant('Honour'); url = await f.start(); await f.callback(url.searchParams.get('state'), production.code);
-  await vi.waitFor(() => expect(f.service.oauth.status().phase).toBe('failed')); expect(f.service.oauth.status().outcome!.code).toBe('TEST_WORKSPACE_ONLY');
+  await vi.waitFor(() => expect(f.service.oauth.status().phase).toBe('failed')); expect(f.service.oauth.status().outcome!.code).toBe('PROTECTED_WORKSPACE');
   f.invalidateIdentity(); url = await f.start(); await f.callback(url.searchParams.get('state'), wrong.code);
   await vi.waitFor(() => expect(f.service.oauth.status().phase).toBe('failed')); expect(f.content).not.toHaveBeenCalled();
   expect(f.store.list()).toHaveLength(1);

@@ -42,7 +42,7 @@ export function ProjectRouteDialog({ workspaces, routes, route, busy, failure, o
       {sameName.length ? <p role="note" className="notice">This name is also used by {sameName.map(item => item.project_key).join(', ')}. Name-based resolution will be ambiguous; use the exact project key.</p> : null}
       <fieldset disabled={busy} className="browser-fields">{workspace ? <PageBrowser key={workspace} workspaceId={workspace} onStateChange={refresh} onSelect={page => {
         if (page.workspace_id === workspace) setRoot(page);
-      }} /> : <p>Connect a test workspace first.</p>}</fieldset>
+      }} /> : <p>Connect a Workspace first.</p>}</fieldset>
       <section className="route-target" aria-label="Selected route target"><h3>Selected route target</h3>{root && root.workspace_id === workspace ? <>
         <strong>{key.trim().toUpperCase() || 'Project key'} → {workspaces.find(item => item.id === workspace)?.label} → {root.title}</strong>
         <p className="mono">Workspace: {workspace}<br />Page: {root.id}</p><p className="field-hint">The page will be checked again when you save.</p>

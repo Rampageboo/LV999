@@ -40,6 +40,15 @@ it('keeps writes disabled by default and enforces startup client scopes before r
   const f=fixture();expect((await f.content.execute(f.create())).code).toBe('WRITE_DISABLED');await f.enable();f.access.mockClear();
   expect((await f.content.execute(f.create(),{actor:'claude',write_workspace_ids:[]})).code).toBe('WRITE_ACCESS_DENIED');expect(f.access).not.toHaveBeenCalled();expect(f.apply).not.toHaveBeenCalled();
 });
+it('production targets remain read-only until the exact ID is confirmed and can be disabled offline',async()=>{
+  const f=fixture();f.store.add({id:f.a,label:'Production target',environment:'production'});
+  expect((await f.content.execute(f.create())).code).toBe('WRITE_DISABLED');f.access.mockClear();
+  expect((await f.content.setEnabled({workspace_id:f.a,enabled:true})).code).toBe('APPROVAL_REQUIRED');
+  expect((await f.content.setEnabled({workspace_id:f.a,enabled:true,confirm_workspace_id:f.b})).code).toBe('APPROVAL_REQUIRED');expect(f.access).not.toHaveBeenCalled();
+  expect((await f.content.setEnabled({workspace_id:f.a,enabled:true,confirm_workspace_id:f.a})).ok).toBe(true);
+  expect((await f.content.execute(f.create(),{actor:'claude',write_workspace_ids:[]})).code).toBe('WRITE_ACCESS_DENIED');
+  f.access.mockRejectedValue(new Error('Offline'));expect((await f.content.setEnabled({workspace_id:f.a,enabled:false})).ok).toBe(true);expect(f.content.enabled(f.a)).toBe(false);
+});
 it('returns a verified prior result for the same retry key without sending a second creation',async()=>{
   const f=fixture();await f.enable();const request=f.create(),first=await f.content.execute(request),second=await f.content.execute(request);
   expect(first.ok).toBe(true);expect(second.data?.id).toBe(first.data?.id);expect(f.apply).toHaveBeenCalledTimes(1);

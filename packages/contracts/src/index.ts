@@ -3,24 +3,30 @@ import { z } from 'zod';
 export const APP_ID = 'com.rampageboo.lv999';
 export const APP_VERSION = '0.1.0';
 export const NOTION_VERSION = '2026-03-11';
+export const WorkspaceEnvironment=z.enum(['test','production']);
+export type WorkspaceEnvironmentId=z.infer<typeof WorkspaceEnvironment>;
+export const isProtectedWorkspaceName=(name:string)=>['vibecode','honour'].includes(name.normalize('NFKC').trim().toLowerCase());
+const ExpectedWorkspaceName=z.string().trim().min(1).max(200);
 export const WorkspaceInput = z.object({
   id: z.uuid(),
   label: z.string().trim().min(1).max(80),
-  environment: z.literal('test'),
+  environment: WorkspaceEnvironment,
 }).strict();
 export type WorkspaceConfig = z.infer<typeof WorkspaceInput>;
 export const WorkspaceRef = z.object({ workspace_id: z.uuid().transform(id => id.toLowerCase()) }).strict();
 export const ConnectWorkspaceInput = z.object({
   label: z.string().trim().max(80).default(''),
   token: z.string().trim().min(1).max(2048),
-  environment: z.literal('test'),
+  environment: WorkspaceEnvironment,
+  expected_workspace_name:ExpectedWorkspaceName.optional(),
 }).strict();
 export const ReauthorizeWorkspaceInput = ConnectWorkspaceInput.omit({ label: true }).extend({ workspace_id: z.uuid() });
 export type ConnectWorkspaceRequest = z.infer<typeof ConnectWorkspaceInput>;
 export type ReauthorizeWorkspaceRequest = z.infer<typeof ReauthorizeWorkspaceInput>;
 export const OAuthConfigInput = z.object({ client_id: z.uuid().transform(id => id.toLowerCase()),
   client_secret: z.string().trim().min(1).max(500).optional() }).strict();
-export const OAuthStartInput = z.object({ label: z.string().trim().max(80).default(''), environment: z.literal('test'),
+export const OAuthStartInput = z.object({ label: z.string().trim().max(80).default(''), environment: WorkspaceEnvironment,
+  expected_workspace_name:ExpectedWorkspaceName.optional(),
   workspace_id: z.uuid().transform(id => id.toLowerCase()).optional() }).strict();
 export type OAuthStatus = { configured: boolean; client_id: string | null; redirect_uri: string;
   phase: 'idle' | 'awaiting' | 'exchanging' | 'complete' | 'failed' | 'cancelled' | 'expired';
@@ -84,7 +90,7 @@ export type ChatOverview = {
   total_unread: number; auto_wake: boolean; bindings:AgentBinding[];
 };
 export type ErrorCode = 'OK' | 'AUTH_REQUIRED' | 'FORBIDDEN' | 'NOT_FOUND_OR_NOT_SHARED' |
-  'WORKSPACE_MISMATCH' | 'TEST_WORKSPACE_ONLY' | 'UNKNOWN_WORKSPACE' | 'RATE_LIMITED' |
+  'WORKSPACE_MISMATCH' | 'TEST_WORKSPACE_ONLY' | 'PROTECTED_WORKSPACE' | 'UNKNOWN_WORKSPACE' | 'RATE_LIMITED' |
   'NETWORK_ERROR' | 'VAULT_UNAVAILABLE' | 'IDENTITY_UNAVAILABLE' | 'INVALID_INPUT' | 'UNSUPPORTED' | 'INTERNAL_ERROR' |
   'WORKSPACE_EXISTS' | 'CONNECTION_BUSY' | 'LOCAL_SAVE_FAILED' | 'CREDENTIAL_STATE_UNCERTAIN' | 'OAUTH_FAILED' | 'OAUTH_CALLBACK_BUSY' |
   'INVALID_RESPONSE' | 'INELIGIBLE_ROOT' | 'UNKNOWN_PROJECT' | 'AMBIGUOUS_TARGET' | 'ROUTE_CONFLICT' |

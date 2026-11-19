@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Snapshot, WorkspaceView } from '../../../../packages/contracts/src/index.js';
+import type { Snapshot, WorkspaceView,WorkspaceEnvironmentId } from '../../../../packages/contracts/src/index.js';
 import { connectWorkspace, reauthorizeWorkspace, verifyWorkspace, refreshOAuth } from '../ipc/backend.js';
 import { EmptyState, Status } from '../components/Primitives.js';
 import { WorkspaceConnectionDialog } from '../components/WorkspaceConnectionDialog.js';
@@ -25,12 +25,12 @@ export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refres
     catch { setMessage('The refresh result is unknown. Reauthorize this workspace before using it again.'); } finally { setBusy(null); }
   }
   function openConnection(workspace?: WorkspaceView) { setFailure(null); setDialog({ workspace }); }
-  async function submit(label: string, token: string) {
+  async function submit(label: string, token: string,environment:WorkspaceEnvironmentId,expectedName?:string) {
     setBusy(dialog?.workspace?.id ?? 'connect'); setFailure(null); setMessage(null); setWarnings([]);
     try {
       const response = dialog?.workspace
-        ? await reauthorizeWorkspace({ workspace_id: dialog.workspace.id, token, environment: 'test' })
-        : await connectWorkspace({ label, token, environment: 'test' });
+        ? await reauthorizeWorkspace({ workspace_id: dialog.workspace.id, token, environment,expected_workspace_name:expectedName })
+        : await connectWorkspace({ label, token, environment,expected_workspace_name:expectedName });
       if (response.ok) {
         setDialog(null);
         setMessage(dialog?.workspace ? 'Workspace reauthorized. Identity and read access verified.' : 'Workspace connected. Identity and read access verified.');
@@ -51,7 +51,7 @@ export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refres
     {data.workspaces.length ? <div className="workspace-list">{data.workspaces.map(w => <section key={w.id} className="workspace">
       <div className="list-row"><h2>{w.label}</h2><Status value={w.status} /></div>
       <dl><dt>Notion workspace</dt><dd>{w.verified_name ?? 'Not verified'}</dd><dt>Workspace ID</dt><dd className="mono">{w.id}</dd>
-        <dt>Environment</dt><dd>{w.write_enabled?'Test · writes enabled':'Test · read-only'}</dd><dt>Last verification</dt><dd>{w.checked_at ? new Date(w.checked_at).toLocaleString() : 'Never'}</dd>
+        <dt>Environment</dt><dd>{w.environment==='production'?'Production target':'Test'} · {w.write_enabled?'writes enabled':'read-only'}</dd><dt>Last verification</dt><dd>{w.checked_at ? new Date(w.checked_at).toLocaleString() : 'Never'}</dd>
         <dt>Read-access check</dt><dd>{w.read_access ? `${w.read_access.sampled_objects} shared objects in the first search batch${w.read_access.has_more ? ' · more available' : ''}. Checked ${new Date(w.read_access.checked_at).toLocaleString()}.` : 'Not verified. Use Verify connection to check identity and read access.'}</dd></dl>
       {w.read_access?.sampled_objects === 0 ? <p className="hint">No shared objects were found at the last connection check. Share a test root page with this connection; search indexing may take time. This is not a full workspace inventory.</p> : null}
       {w.message ? <p className="notice">{w.code}: {w.message}</p> : null}
@@ -62,7 +62,7 @@ export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refres
         <button onClick={() => openChat({ workspace_id: w.id })} disabled={busy !== null}>Open group chat</button>
         <button disabled={busy !== null || !data.capabilities.browse_pages} onClick={() => setBrowsing(browsing === w.id ? null : w.id)}>{browsing === w.id ? 'Hide pages' : 'Browse pages'}</button></div>
       {browsing === w.id ? <PageBrowser key={w.id} workspaceId={w.id} onStateChange={refresh} /> : null}
-    </section>)}</div> : <EmptyState title="No test workspaces configured">Select Connect with Notion to authorize through an OAuth app, or Connect workspace to enter an Internal Connection token. Each test Workspace gets its own group chat. Vibecode and Honour remain blocked.</EmptyState>}
+    </section>)}</div> : <EmptyState title="No Workspaces configured">Authorize a production target or test Workspace. Each gets its own group chat. Production targets start read-only; Vibecode and Honour remain protected.</EmptyState>}
     {dialog ? <WorkspaceConnectionDialog workspace={dialog.workspace} busy={busy !== null} failure={failure} onClose={() => setDialog(null)} onSubmit={submit} /> : null}
     {oauth ? <NotionOAuthDialog workspace={oauth.workspace} onClose={() => setOAuth(null)} onConnected={refresh} /> : null}
   </>;

@@ -24,6 +24,7 @@ export function Content({data,refresh}:{data:Snapshot;refresh:()=>Promise<void>}
   const [pending,setPending]=useState<Mutation|null>(null),[review,setReview]=useState<{plan:MutationPlan;request?:Mutation}|null>(null),[token,setToken]=useState<string|null>(null);
   const [plans,setPlans]=useState<(MutationPlan&{actor:string})[]>([]),[operations,setOperations]=useState<any[]>([]),[advanced,setAdvanced]=useState(JSON.stringify({kind:'create_view',data_source_id:'',name:'Table',view_type:'table'},null,2));
   const epoch=useRef(0),pageEpoch=useRef(0),dialog=useRef<HTMLDialogElement>(null);
+  const [writeConfirm,setWriteConfirm]=useState<string|null>(null),writeDialog=useRef<HTMLDialogElement>(null);
   const current=data.workspaces.find(w=>w.id===workspace),route=data.projects.find(p=>p.project_key===project);
   const target:Mutation['target']=project?{project_key:project,route_revision:route?.revision}:{workspace_id:workspace};
   const version=document?.page?.id===pageId?document?.page?.last_edited_time:undefined;
@@ -37,6 +38,10 @@ export function Content({data,refresh}:{data:Snapshot;refresh:()=>Promise<void>}
   }
   useEffect(()=>{setPageId('');setSourceId('');setDocument(null);setCatalog(null);setPending(null);setResult(null);setReview(null);setToken(null);if(workspace)void loadCatalog();return()=>{epoch.current++;};},[workspace]);
   useEffect(()=>{if(review)dialog.current?.showModal();else dialog.current?.close();},[review]);
+  useEffect(()=>{if(writeConfirm)writeDialog.current?.showModal();else writeDialog.current?.close();},[writeConfirm]);
+  async function changeWrite(enabled:boolean,confirmedId?:string){
+    setBusy(true);setFailure(null);try{const reply=await setWorkspaceWrites(confirmedId??workspace,enabled,confirmedId);if(reply.ok)setWriteConfirm(null);else setFailure(reply.errors.join(' '));await refresh();}catch{setFailure('Workspace permission result unknown. Refresh before retrying.');}finally{setBusy(false);}
+  }
   async function loadPage(id:string){
     const generation=epoch.current,request=++pageEpoch.current;setBusy(true);setFailure(null);
     try{const reply=await readContent({workspace_id:workspace,kind:'page_tree',resource_id:id,max_depth:1});if(generation!==epoch.current||request!==pageEpoch.current)return;
@@ -86,8 +91,8 @@ export function Content({data,refresh}:{data:Snapshot;refresh:()=>Promise<void>}
   return <>
     <div className="content-target"><label className="form-field">Workspace<select aria-label="Content Workspace" value={workspace} disabled={busy||Boolean(pending)} onChange={e=>{setProject('');setWorkspace(e.target.value);}}>{data.workspaces.map(w=><option value={w.id} key={w.id}>{w.label}</option>)}</select></label>
       <label className="form-field">Project route<select aria-label="Content project route" value={project} disabled={busy||Boolean(pending)} onChange={e=>{setProject(e.target.value);const next=data.projects.find(p=>p.project_key===e.target.value);if(next)setWorkspace(next.workspace_id);}}><option value="">Workspace directly</option>{data.projects.map(p=><option key={p.project_key} value={p.project_key}>{p.project_key} · {p.name}</option>)}</select></label></div>
-    <p><strong>Target: {current?.label??'Select a test Workspace'}{project?` · ${project}`:''}</strong> · {current?.write_enabled?'Writes enabled':'Read-only'}</p>
-    <label className="test-confirm"><input type="checkbox" checked={Boolean(current?.write_enabled)} disabled={busy||!workspace||Boolean(pending)} onChange={async e=>{setBusy(true);try{const reply=await setWorkspaceWrites(workspace,e.target.checked);if(!reply.ok)setFailure(reply.errors.join(' '));await refresh();}finally{setBusy(false);}}}/>Enable content writes in this test Workspace</label>
+    <p><strong>Target: {current?.label??'Select a Workspace'}{project?` · ${project}`:''}</strong> · {current?.environment==='production'?'Production target':'Test'} · {current?.write_enabled?'Writes enabled':'Read-only'}</p>
+    <label className="test-confirm"><input type="checkbox" checked={Boolean(current?.write_enabled)} disabled={busy||!workspace||Boolean(pending)} onChange={e=>{if(e.target.checked&&current?.environment==='production')setWriteConfirm(workspace);else void changeWrite(e.target.checked);}}/>Enable content writes in this Workspace</label>
     {failure?<p role="alert" className="form-error">{failure}</p>:null}{notice?<p role="status" className="notice">{notice}</p>:null}{busy?<p role="status">Validating target and waiting for Notion…</p>:null}
     {pending&&!review?<div className="notice"><p>Retry key: <span className="mono">{pending.idempotency_key}</span></p><button disabled={busy} onClick={()=>void complete(pending)}>Retry same request / verify again</button></div>:null}
     <section className="content-section"><div className="section-toolbar"><h2>Pages and records</h2><button disabled={busy||listing} onClick={()=>void loadCatalog()}>Refresh available content</button></div>
@@ -124,6 +129,10 @@ export function Content({data,refresh}:{data:Snapshot;refresh:()=>Promise<void>}
       <p className="field-hint">Unknown outcomes are blocked instead of automatically retried. A retry of an accepted request only checks its recorded result.</p>
     </section>
     {result?<section className="content-section"><h2>Last verified result</h2><pre className="content-json">{JSON.stringify(result,null,2)}</pre></section>:null}
+    <dialog ref={writeDialog} className="connection-dialog" aria-labelledby="production-write-title" onCancel={e=>{e.preventDefault();if(!busy)setWriteConfirm(null);}}>
+      <h2 id="production-write-title">Enable production content writes</h2><p><strong>{data.workspaces.find(w=>w.id===writeConfirm)?.label}</strong></p><p className="mono">{writeConfirm}</p><p>This enables content mutations in this exact production target. Native clients still need their separate write scope; trash and schema edits still require individual approvals. You can disable writes immediately, even when Notion is offline.</p>
+      <div className="dialog-actions"><button disabled={busy} onClick={()=>setWriteConfirm(null)}>Keep read-only</button><button className="primary" disabled={busy||!writeConfirm} onClick={()=>void changeWrite(true,writeConfirm!)}>Enable writes in this exact Workspace</button></div>
+    </dialog>
     <dialog ref={dialog} className="connection-dialog" aria-labelledby="mutation-review-title" onCancel={e=>{e.preventDefault();if(!busy){setReview(null);setPending(null);setToken(null);}}}>
       {review?<><h2 id="mutation-review-title">Review exact destructive change</h2><p><strong>{data.workspaces.find(w=>w.id===review.plan.workspace_id)?.label}</strong> · {review.plan.title}</p><p>{review.plan.summary}</p><dl><dt>Target ID</dt><dd className="mono">{review.plan.resource_id}</dd><dt>Version</dt><dd>{review.plan.version??'No version returned'}</dd></dl>
         <p>Trash is recoverable in Notion. This approval expires and can be used only once for this unchanged request.</p>

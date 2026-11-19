@@ -67,7 +67,8 @@ async function stop() {
 function state() { return page.evaluate(() => window.__TAURI_INTERNALS__.invoke('backend_snapshot')); }
 async function open() {
   await page.getByRole('button', { name: 'Connect workspace', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Connect test workspace' });
+  const dialog = page.getByRole('dialog', { name: 'Connect workspace' });
+  await dialog.getByLabel('Connection environment',{exact:true}).selectOption('test');
   await dialog.waitFor(); return dialog;
 }
 async function submit(dialog, kind, label) {
@@ -144,7 +145,7 @@ try {
     console.log(`Routing evidence (simulated Notion HTTP, real native/vault/storage): ${evidence}`);
   } else {
 
-  for (const [kind, expected] of [['unauthorized', 'AUTH_REQUIRED'], ['network', 'NETWORK_ERROR'], ['forbidden', 'FORBIDDEN'], ['production', 'TEST_WORKSPACE_ONLY'], ['alpha', 'WORKSPACE_EXISTS']]) {
+  for (const [kind, expected] of [['unauthorized', 'AUTH_REQUIRED'], ['network', 'NETWORK_ERROR'], ['forbidden', 'FORBIDDEN'], ['production', 'PROTECTED_WORKSPACE'], ['alpha', 'WORKSPACE_EXISTS']]) {
     dialog = await open(); await submit(dialog, kind, '');
     await dialog.getByRole('alert').filter({ hasText: expected }).waitFor({ timeout: 30000 });
     await noLeak();

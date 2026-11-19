@@ -14,7 +14,7 @@ const pages = [
   ['Dashboard', '⌂', 'Your Notion connections, in one place.'],
   ['Workspaces', '▱', 'Separate connections. Verified identities.'],
   ['Routing', '⑂', 'One clear destination for every project.'],
-  ['Content', '▤', 'Create and edit content in an explicit test Workspace.'],
+  ['Content', '▤', 'Create and edit content in an explicit Workspace.'],
   ['Clients', '♧', 'Connect your AI tools to the same backend.'],
   ['Chats', '◇', 'Workspace groups and project conversations, together.'],
   ['Migration', '⇄', 'Move forward without losing the source.'],

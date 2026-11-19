@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { randomUUID,createHash } from 'node:crypto';
 import { APP_ID, APP_VERSION, NOTION_VERSION, ConnectWorkspaceInput, ReauthorizeWorkspaceInput, WorkspaceInput,
   BrowsePagesInput, InspectPageInput, SaveProjectInput, ResolveProjectInput,
-  result, type Result, type Snapshot, type WorkspaceConfig, type WorkspaceView, type AccessiblePage, type PageBatch, type ProjectRoute } from '../../../../packages/contracts/src/index.js';
+  result,isProtectedWorkspaceName, type Result, type Snapshot, type WorkspaceConfig, type WorkspaceView, type AccessiblePage, type PageBatch, type ProjectRoute,type WorkspaceEnvironmentId } from '../../../../packages/contracts/src/index.js';
 import { DomainError, OfficialNotionAdapter, safeError, type NotionAdapter, type Identity } from '../notion/adapter.js';
 import { Store, projectNameLookup } from '../infra/store.js';
 import { pageBatch, pageMetadata, pageReference } from '../notion/page-metadata.js';
@@ -52,9 +52,15 @@ export class Service {
     this.vaultReady = await this.vault.probe();
     this.store.log({ level: 'info', action: 'Backend started', workspace_id: null, code: 'OK' });
   }
-  private assertTestName(name: string) {
-    if (['vibecode', 'honour'].includes(name.trim().toLowerCase()))
-      throw new DomainError('TEST_WORKSPACE_ONLY', 'Only test workspaces may be connected. Vibecode and Honour remain blocked.');
+  private assertAllowedWorkspace(name: string,id?:string) {
+    if(isProtectedWorkspaceName(name)||(id&&this.store.isProtected(id))){
+      if(id)this.store.protect(id);
+      throw new DomainError('PROTECTED_WORKSPACE','Vibecode and Honour are protected source Workspaces. No page/content request is allowed.');
+    }
+  }
+  private confirmEnvironment(input:{environment:WorkspaceEnvironmentId;expected_workspace_name?:string},identity:Identity){
+    if(input.environment==='production'&&(!input.expected_workspace_name||projectNameLookup(input.expected_workspace_name)!==projectNameLookup(identity.workspace_name)))
+      throw new DomainError('WORKSPACE_MISMATCH','Production authorization must match the exact expected Notion Workspace name. Nothing was saved and no content request was sent.');
   }
   private async identity(adapter: NotionAdapter, expectedId?: string) {
     const parsed = z.object({ workspace_id: z.uuid(), workspace_name: z.string().trim().min(1).max(200), bot_id: z.uuid() })
@@ -63,7 +69,7 @@ export class Service {
     const identity = { ...parsed.data, workspace_id: parsed.data.workspace_id.toLowerCase() };
     if (expectedId && identity.workspace_id !== expectedId.toLowerCase())
       throw new DomainError('WORKSPACE_MISMATCH', 'The token belongs to a different workspace. No content request was sent; the previous credential was kept.');
-    this.assertTestName(identity.workspace_name);
+    this.assertAllowedWorkspace(identity.workspace_name,identity.workspace_id);
     return identity;
   }
   private async readAccess(adapter: NotionAdapter): Promise<NonNullable<WorkspaceView['read_access']>> {
@@ -78,9 +84,8 @@ export class Service {
   }
   private async verifiedAdapter(id: string) {
     const config = this.store.list().find(w => w.id === id);
-    if (!config) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered test workspace.');
-    if (config.environment !== 'test' || ['vibecode','honour'].includes(config.label.toLowerCase()))
-      throw new DomainError('TEST_WORKSPACE_ONLY', 'Only test workspaces are allowed during development.');
+    if (!config) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered Workspace.');
+    this.assertAllowedWorkspace(config.label,id);
     const token = await this.vault.read(id);
     if (!token) throw new DomainError('AUTH_REQUIRED', 'No token is stored for this workspace in Windows Credential Manager.');
     const decoded = decodeCredential(token);
@@ -135,16 +140,18 @@ export class Service {
     let id: string | null = null;
     try {
       const parsed = ConnectWorkspaceInput.safeParse(input);
-      if (!parsed.success) throw new DomainError('INVALID_INPUT', 'Enter a token, a display name of at most 80 characters, and confirm this is a test workspace.');
+      if (!parsed.success) throw new DomainError('INVALID_INPUT', 'Enter a token, a display name of at most 80 characters, and confirm this is a Workspace.');
+      if(parsed.data.environment==='production'&&!parsed.data.expected_workspace_name)throw new DomainError('INVALID_INPUT','Enter the exact expected Notion Workspace name for a production target.');
       const { label, token } = parsed.data;
-      this.assertTestName(label);
+      this.assertAllowedWorkspace(label);
       const adapter = this.makeAdapter(token);
       const identity = await this.identity(adapter);
+      this.confirmEnvironment(parsed.data,identity);
       id = identity.workspace_id;
       if (this.store.list().some(w => w.id === id))
         throw new DomainError('WORKSPACE_EXISTS', 'This workspace is already connected. Use its Reauthorize action to replace the credential.');
       const access = await this.readAccess(adapter);
-      const config = WorkspaceInput.parse({ id, label: label || identity.workspace_name.slice(0, 80), environment: 'test' });
+      const config = WorkspaceInput.parse({ id, label: label || identity.workspace_name.slice(0, 80), environment: parsed.data.environment });
       await this.saveCredential(config, token, this.proof(identity, access, 'internal'), false);
       return this.connectionReply(id);
     } catch (error) { return this.failed(id, 'Workspace connection failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
@@ -153,31 +160,35 @@ export class Service {
     let id: string | null = null;
     try {
       const parsed = ReauthorizeWorkspaceInput.safeParse(input);
-      if (!parsed.success) throw new DomainError('INVALID_INPUT', 'Select a registered test workspace and enter a replacement token.');
+      if (!parsed.success) throw new DomainError('INVALID_INPUT', 'Select a registered Workspace and enter a replacement token.');
       id = parsed.data.workspace_id.toLowerCase();
       const current = this.store.list().find(w => w.id === id);
-      if (!current) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered test workspace.');
-      this.assertTestName(current.label);
+      if (!current) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered Workspace.');
+      this.assertAllowedWorkspace(current.label,id);
+      if(current.environment!==parsed.data.environment)throw new DomainError('WORKSPACE_MISMATCH','Reauthorization cannot change the registered environment.');
       const adapter = this.makeAdapter(parsed.data.token);
       const identity = await this.identity(adapter, id);
+      this.confirmEnvironment(parsed.data,identity);
       const access = await this.readAccess(adapter);
       await this.saveCredential(current, parsed.data.token, this.proof(identity, access, 'internal'), true);
       return this.connectionReply(id);
     } catch (error) { return this.failed(id, 'Workspace reauthorization failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
   }
-  private async connectOAuth(credential: OAuthCredential, input: { label: string; workspace_id?: string }) {
+  private async connectOAuth(credential: OAuthCredential, input: { label: string; workspace_id?: string;environment:WorkspaceEnvironmentId;expected_workspace_name?:string }) {
     let id: string | null = null;
     try {
-      this.assertTestName(input.label);
+      this.assertAllowedWorkspace(input.label);
       const adapter = this.makeAdapter(credential.access_token, credential);
       const identity = await this.identity(adapter, input.workspace_id ?? credential.identity.workspace_id);
+      this.confirmEnvironment(input,identity);
       id = identity.workspace_id;
       const current = this.store.list().find(w => w.id === id);
       if (!input.workspace_id && current)
         throw new DomainError('WORKSPACE_EXISTS', 'This workspace is already connected. Select its Reauthorize action to replace the credential.');
       if (input.workspace_id && !current) throw new DomainError('UNKNOWN_WORKSPACE', 'The workspace is no longer registered.');
+      if(current&&current.environment!==input.environment)throw new DomainError('WORKSPACE_MISMATCH','Reauthorization cannot change the registered environment.');
       const access = await this.readAccess(adapter);
-      const config = current ?? WorkspaceInput.parse({ id, label: input.label || identity.workspace_name.slice(0, 80), environment: 'test' });
+      const config = current ?? WorkspaceInput.parse({ id, label: input.label || identity.workspace_name.slice(0, 80), environment: input.environment });
       await this.saveCredential(config, encodeCredential(credential), this.proof(identity, access, 'oauth'), Boolean(input.workspace_id));
       return this.connectionReply(id);
     } catch (error) { return this.failed<WorkspaceView>(id, 'Workspace OAuth connection failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
@@ -186,9 +197,9 @@ export class Service {
     const owner = randomUUID(); let locked = false, refreshed = false;
     try {
       const current = this.store.list().find(w => w.id === id);
-      if (!current) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered test workspace.');
+      if (!current) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered Workspace.');
       if (current.auth_kind !== 'oauth') throw new DomainError('INVALID_INPUT', 'This workspace uses an Internal Connection. Use Reauthorize to replace its token.');
-      this.assertTestName(current.label);
+      this.assertAllowedWorkspace(current.label,id);
       if (!this.store.acquireConnection(id, owner)) throw new DomainError('CONNECTION_BUSY', 'Another instance is updating this connection.');
       locked = true;
       const raw = await this.vault.read(id), previous = raw ? decodeCredential(raw).oauth : undefined;
@@ -235,7 +246,7 @@ export class Service {
   page(id: string, pageId: string) { return this.read(id, 'Page read', a => a.page(pageId), true); }
   async browsePages(input: unknown): Promise<Result<PageBatch>> {
     const parsed = BrowsePagesInput.safeParse(input);
-    if (!parsed.success) return result<PageBatch>(null, null, 'INVALID_INPUT', ['Select a test workspace and a valid title query/cursor.']);
+    if (!parsed.success) return result<PageBatch>(null, null, 'INVALID_INPUT', ['Select a Workspace and a valid title query/cursor.']);
     const { workspace_id, query, start_cursor } = parsed.data;
     const reply = await this.read(workspace_id, 'Accessible pages searched', async adapter =>
       pageBatch(await adapter.search(query, start_cursor, true), workspace_id, start_cursor));
@@ -255,7 +266,7 @@ export class Service {
   private targetFailure<T>(id: string | null, action: string, error: unknown): Result<T> {
     const failure = safeError(error);
     // A missing/unshared object is not proof that the workspace connection itself failed.
-    const connectionFailure = ['AUTH_REQUIRED', 'WORKSPACE_MISMATCH', 'TEST_WORKSPACE_ONLY', 'VAULT_UNAVAILABLE', 'NETWORK_ERROR'].includes(failure.code);
+    const connectionFailure = ['AUTH_REQUIRED', 'WORKSPACE_MISMATCH', 'PROTECTED_WORKSPACE', 'TEST_WORKSPACE_ONLY', 'VAULT_UNAVAILABLE', 'NETWORK_ERROR'].includes(failure.code);
     return this.failed<T>(id, action, failure, connectionFailure);
   }
   async inspectPage(input: unknown): Promise<Result<AccessiblePage>> {
@@ -324,8 +335,8 @@ export class Service {
       diagnostics: [
         { key: 'runtime', label: 'Node runtime', status: 'pass', detail: `${process.version} · ${process.arch}` },
         { key: 'vault', label: 'Credential vault', status: this.vaultReady ? 'pass' : 'error', detail: this.vaultReady ? 'Windows Credential Manager available' : 'Windows Credential Manager unavailable' },
-        { key: 'notion', label: 'Notion connections', status: workspaces.length >= 2 && workspaces.every(w => w.status === 'Connected') ? 'pass' : 'pending',
-          detail: `${workspaces.filter(w => w.status === 'Connected').length} verified / ${workspaces.length} configured · two test workspaces required` },
+        { key: 'notion', label: 'Notion connections', status: workspaces.length > 0 && workspaces.every(w => w.status === 'Connected') ? 'pass' : 'pending',
+          detail: `${workspaces.filter(w => w.status === 'Connected').length} verified / ${workspaces.length} configured · ${workspaces.filter(w=>w.environment==='production').length} production targets` },
         { key: 'transport', label: 'Management transport', status: 'pass', detail: 'Private process pipes · OAuth callback listens only during authorization on localhost:8765' },
       ],
       workspaces, activity: this.store.activity(), projects: this.store.projects(),
