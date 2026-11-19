@@ -33,7 +33,7 @@ export function AIClients({ data }: { data: Snapshot }) {
     } catch { setFailure('Handshake response unavailable. No connection success is assumed.'); } finally { setBusy(null); }
   }
   return <>
-    <div className="section-toolbar"><p>Installation, saved configuration and handshake evidence are separate. Tests use an isolated client profile and never start a model turn.</p>
+    <div className="section-toolbar">
       <button disabled={busy !== null} onClick={() => void detect()}>Detect clients</button></div>
     {failure ? <p role="alert" className="form-error">{failure}</p> : null}
     {busy ? <p role="status">Checking local client integration…</p> : null}
@@ -41,11 +41,10 @@ export function AIClients({ data }: { data: Snapshot }) {
       <div className="list-row"><h2>{client.name}</h2><strong>{client.status}</strong></div>
       <dl><dt>Installed version</dt><dd>{client.version ?? 'Not detected'}</dd><dt>CLI path</dt><dd className="mono">{client.executable ?? 'Not found on PATH'}</dd>
         <dt>User configuration</dt><dd className="mono">{client.config_path}</dd><dt>LV999 entry</dt><dd>{client.config_state}</dd></dl>
-      <p>{client.detail}</p>
+      {client.status==='Degraded'?<p className="notice">{client.detail}</p>:null}
       <fieldset className="chat-permissions" disabled={busy!==null}><legend>Notion project message boards</legend>
         <label className="test-confirm"><input type="checkbox" checked={boardsOnly[client.id]} onChange={e=>{setBoardsOnly(old=>({...old,[client.id]:e.target.checked}));setConfig(null);}}/>Message-board-only profile (three tools; no automatic turns)</label>
         {data.projects.map(project=><label className="test-confirm" key={project.project_key}><input type="checkbox" checked={boardProjects[client.id].includes(project.project_key)} onChange={e=>{setBoardProjects(old=>({...old,[client.id]:e.target.checked?[...old[client.id],project.project_key]:old[client.id].filter(key=>key!==project.project_key)}));setConfig(null);}}/>{project.project_key} · {project.name}</label>)}
-        <p className="field-hint">Only configured board pages can be read/appended. Other production content stays read-only. Create or pause each board from Routing. Reload the client after applying.</p>
       </fieldset>
       <fieldset className="chat-permissions" disabled={busy !== null||boardsOnly[client.id]}><legend>Chat access in the generated configuration (opt-in)</legend>
         {data.workspaces.length ? data.workspaces.map(workspace => <label className="test-confirm" key={workspace.id}><input type="checkbox" checked={access[client.id].includes(workspace.id)}
@@ -54,17 +53,15 @@ export function AIClients({ data }: { data: Snapshot }) {
       </fieldset>
       <fieldset className="chat-permissions" disabled={busy!==null||boardsOnly[client.id]}><legend>Notion read access in the generated configuration</legend>
         {data.workspaces.map(workspace=><label className="test-confirm" key={workspace.id}><input type="checkbox" checked={reads[client.id].includes(workspace.id)} onChange={event=>{setReads(previous=>({...previous,[client.id]:event.target.checked?[...previous[client.id],workspace.id]:previous[client.id].filter(id=>id!==workspace.id)}));if(!event.target.checked)setWrites(previous=>({...previous,[client.id]:previous[client.id].filter(id=>id!==workspace.id)}));setConfig(null);}}/>{workspace.label} · {workspace.environment==='production'?'Production target':'Test'}</label>)}
-        <p className="field-hint">Production access is always opt-in. Selecting no Workspaces generates a profile with no content read access. Legacy unscoped profiles can read only test connections.</p>
       </fieldset>
       <fieldset className="chat-permissions" disabled={busy!==null||boardsOnly[client.id]}><legend>Notion write access in the generated configuration (opt-in)</legend>
         {data.workspaces.map(workspace=><label className="test-confirm" key={workspace.id}><input type="checkbox" disabled={!workspace.write_enabled||!reads[client.id].includes(workspace.id)} checked={writes[client.id].includes(workspace.id)} onChange={event=>{setWrites(previous=>({...previous,[client.id]:event.target.checked?[...previous[client.id],workspace.id]:previous[client.id].filter(id=>id!==workspace.id)}));setConfig(null);}}/>{workspace.label}{!workspace.write_enabled?' · enable Workspace writes on Content first':!reads[client.id].includes(workspace.id)?' · select read access first':''}</label>)}
       </fieldset>
-      <p className="field-hint">Selections affect the generated snippet and isolated tests only. They do not change an existing client's permissions.</p>
       <div className="workspace-actions"><button disabled={busy !== null} onClick={() => void generate(client.id)}>Generate configuration</button>
         <button disabled={busy !== null} onClick={() => void test(client.id, 'sdk')}>Test LV999 transport</button>
         <button disabled={busy !== null || !client.executable} onClick={() => void test(client.id, 'native')}>Test native client</button></div>
       {client.handshake ? <div className="notice" role="status"><strong>{client.handshake.ok ? 'Handshake passed' : 'Handshake not confirmed'} · {client.handshake.kind === 'native' ? 'Installed client / isolated profile' : 'LV999 SDK transport'}</strong>
-        <p>{client.handshake.detail}</p><small>{new Date(client.handshake.checked_at).toLocaleString()} · {client.handshake.tool_count} tools discovered. Saved user configuration is unchanged.</small></div> : null}
+        <small>{new Date(client.handshake.checked_at).toLocaleString()} · {client.handshake.tool_count} tools</small></div> : null}
     </section>)}
     {config ? <section className="generated-config" aria-label="Generated client configuration"><h2>{config.client === 'claude' ? 'Claude Code' : 'Codex'} configuration · {config.format}</h2>
       <p>Apply only the LV999 entry to <span className="mono">{config.config_path}</span>, or copy it for a manual merge. Close the native client before applying; restart/reload it afterwards. Existing files are backed up and unrelated settings are preserved.</p>

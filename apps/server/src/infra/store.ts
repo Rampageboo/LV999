@@ -24,7 +24,9 @@ export class Store {
   }
   add(input: WorkspaceConfig) {
     const config = WorkspaceInput.parse(input);
-    if (isProtectedWorkspaceName(config.label)||this.isProtected(config.id)) throw new Error('PROTECTED_WORKSPACE');
+    const source=config.access_role==='source';
+    if(source&&config.environment!=='production')throw new Error('INVALID_INPUT');
+    if(projectNameLookup(config.label)==='honour'||!source&&(isProtectedWorkspaceName(config.label)||this.isProtected(config.id)))throw new Error('PROTECTED_WORKSPACE');
     this.db.prepare('INSERT INTO workspaces (id,config) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET config=excluded.config,verification=NULL')
       .run(config.id, JSON.stringify(config));
   }

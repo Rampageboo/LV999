@@ -28,7 +28,7 @@ export class ContentService {
     if(!parsed.success)return this.fail(new DomainError('INVALID_INPUT','Select an exact Workspace.'));
     const {workspace_id:id,enabled}=parsed.data;
     try{const workspace=this.store.list().find(w=>w.id===id);if(!workspace)throw new DomainError('UNKNOWN_WORKSPACE','Select a registered Workspace.');
-      if(enabled){if(workspace.environment==='production'&&parsed.data.confirm_workspace_id!==id)throw new DomainError('APPROVAL_REQUIRED','Confirm this exact production Workspace ID before enabling content writes.');await this.access(id);}
+      if(enabled){if(workspace.access_role==='source')throw new DomainError('WRITE_ACCESS_DENIED','Source connections cannot enable writes.');if(workspace.environment==='production'&&parsed.data.confirm_workspace_id!==id)throw new DomainError('APPROVAL_REQUIRED','Confirm this exact production Workspace ID before enabling content writes.');await this.access(id);}
       this.store.db.prepare('INSERT INTO workspace_write_policy(workspace_id,enabled) VALUES(?,?) ON CONFLICT(workspace_id) DO UPDATE SET enabled=excluded.enabled').run(id,Number(enabled));
       this.store.log({level:'info',action:enabled?`${workspace.environment==='production'?'Production':'Test'} Workspace writes enabled`:'Workspace writes disabled',workspace_id:id,code:'OK'});return result({enabled},id);
     }catch(error){return this.fail(error,id);}
@@ -41,6 +41,7 @@ export class ContentService {
     return{workspaceId:route.workspace_id,projectKey:route.project_key,routeRevision:route.revision,rootId:route.root_page.id};
   }
   private permission(target:Target,caller:ContentCaller,operation:MutationOp){
+    if(this.store.list().find(w=>w.id===target.workspaceId)?.access_role==='source')throw new DomainError('WRITE_ACCESS_DENIED','Source connections are strictly read-only.');
     if(caller.project_keys&&(!target.projectKey||!caller.project_keys.includes(target.projectKey)))throw new DomainError('WRITE_ACCESS_DENIED','This session can write only through its bound project route.');
     if(caller.write_workspace_ids!=='owner'&&!caller.write_workspace_ids.includes(target.workspaceId))throw new DomainError('WRITE_ACCESS_DENIED','This client was not granted write access to that Workspace. Regenerate its scoped configuration.');
     if(caller.limited_board){

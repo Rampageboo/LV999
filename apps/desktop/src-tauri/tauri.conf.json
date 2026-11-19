@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "label": "main", "title": "LV999", "width": 1200, "height": 820, "minWidth": 760, "minHeight": 600 }],
+    "windows": [{ "label": "main", "title": "LV999", "width": 1200, "height": 820, "minWidth": 760, "minHeight": 600, "decorations": false, "shadow": true }],
     "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'" }
   },
   "plugins": {

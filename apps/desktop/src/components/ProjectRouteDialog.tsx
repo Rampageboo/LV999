@@ -31,7 +31,6 @@ export function ProjectRouteDialog({ workspaces, routes, route, busy, failure, o
     onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
     <form onSubmit={submit}>
       <h2 id="route-title">{route ? 'Edit project mapping' : 'Add project mapping'}</h2>
-      <p>Choose an exact workspace and an ordinary page as this project's root. Saving changes local routing only and rechecks the page before committing.</p>
       <fieldset disabled={busy} className="route-fields"><label className="form-field">Project key<input aria-label="Project key" value={key} required maxLength={32}
         pattern={'[A-Za-z][A-Za-z0-9_\\-]{0,31}'} readOnly={Boolean(route)} autoFocus onChange={event => setKey(event.target.value)} /></label>
         <label className="form-field">Project name<input aria-label="Project name" value={name} required maxLength={80} onChange={event => setName(event.target.value)} /></label>
@@ -45,7 +44,7 @@ export function ProjectRouteDialog({ workspaces, routes, route, busy, failure, o
       }} /> : <p>Connect a Workspace first.</p>}</fieldset>
       <section className="route-target" aria-label="Selected route target"><h3>Selected route target</h3>{root && root.workspace_id === workspace ? <>
         <strong>{key.trim().toUpperCase() || 'Project key'} → {workspaces.find(item => item.id === workspace)?.label} → {root.title}</strong>
-        <p className="mono">Workspace: {workspace}<br />Page: {root.id}</p><p className="field-hint">The page will be checked again when you save.</p>
+        <details><summary>Target details</summary><p className="mono">Workspace: {workspace}<br />Page: {root.id}</p></details>
       </> : <p>Inspect a page above, then choose Use as project root.</p>}</section>
       {failure ? <p role="alert" className="form-error">{failure}</p> : null}
       {busy ? <p role="status">Validating the exact workspace and root page, then saving the local mapping…</p> : null}

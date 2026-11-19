@@ -6,7 +6,7 @@ import { OfficialOAuthExchange, type OAuthCredential, type OAuthExchange } from 
 import type { Store } from '../infra/store.js';
 import type { Vault } from '../infra/vault.js';
 
-type Start = { label: string; environment: WorkspaceEnvironmentId; workspace_id?: string;expected_workspace_name?:string };
+type Start = { label: string; environment: WorkspaceEnvironmentId; workspace_id?: string;expected_workspace_name?:string;access_role?:'target'|'source' };
 export class NotionOAuth {
   private server: Server | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -63,7 +63,9 @@ export class NotionOAuth {
       const parsed = OAuthStartInput.safeParse(input);
       if (!parsed.success) throw new DomainError('INVALID_INPUT', 'Confirm a Workspace before authorizing.');
       if(parsed.data.environment==='production'&&!parsed.data.expected_workspace_name)throw new DomainError('INVALID_INPUT','Enter the exact Notion Workspace name for this production target.');
-      if(isProtectedWorkspaceName(parsed.data.label)||isProtectedWorkspaceName(parsed.data.expected_workspace_name??''))throw new DomainError('PROTECTED_WORKSPACE','Vibecode and Honour remain protected; do not authorize them in this workflow.');
+      const source=parsed.data.access_role==='source',expected=(parsed.data.expected_workspace_name??'').normalize('NFKC').trim().toLowerCase();
+      if(source&&(parsed.data.environment!=='production'||expected!=='vibecode'))throw new DomainError('INVALID_INPUT','Read-only source mode requires the exact Vibecode identity.');
+      if([parsed.data.label,parsed.data.expected_workspace_name??''].some(name=>isProtectedWorkspaceName(name)&&!(source&&name.normalize('NFKC').trim().toLowerCase()==='vibecode')))throw new DomainError('PROTECTED_WORKSPACE','This Workspace is not authorized for the selected connection role.');
       if (this.phase === 'awaiting' || this.phase === 'exchanging') throw new DomainError('CONNECTION_BUSY', 'An authorization is already in progress.');
       const clientId = this.clientId();
       if (!clientId) throw new DomainError('AUTH_REQUIRED', 'Save your Notion OAuth app settings first.');
@@ -72,6 +74,7 @@ export class NotionOAuth {
       if (parsed.data.workspace_id && !this.store.list().some(w => w.id === parsed.data.workspace_id))
         throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered Workspace to reauthorize.');
       if(parsed.data.workspace_id&&this.store.list().find(w=>w.id===parsed.data.workspace_id)?.environment!==parsed.data.environment)throw new DomainError('WORKSPACE_MISMATCH','Reauthorization cannot change the registered environment.');
+      if(parsed.data.workspace_id&&(this.store.list().find(w=>w.id===parsed.data.workspace_id)?.access_role??'target')!==(parsed.data.access_role??'target'))throw new DomainError('WORKSPACE_MISMATCH','Reauthorization cannot change the connection role.');
       const state = randomBytes(32).toString('base64url');
       this.phase = 'awaiting'; this.outcome = null;
       const server = createServer((request, response) => {

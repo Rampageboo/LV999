@@ -85,6 +85,13 @@ it('rejects missing/mismatched production names and environment changes before c
   url=await f.start({environment:'production',expected_workspace_name:'Target Alpha'});await f.callback(url.searchParams.get('state'),a.code);await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));
   expect((await f.service.oauth.start({environment:'test',workspace_id:a.value.identity.workspace_id})).code).toBe('WORKSPACE_MISMATCH');
 });
+it('supports only explicit read-only Vibecode source OAuth and preserves its source role on refresh',async()=>{
+ const f=await fixture(),a=f.grant('Vibecode');
+ expect((await f.service.oauth.start({environment:'production',access_role:'source',expected_workspace_name:'Honour'})).code).toBe('INVALID_INPUT');
+ const url=await f.start({environment:'production',access_role:'source',expected_workspace_name:'Vibecode',label:'Vibecode'});await f.callback(url.searchParams.get('state'),a.code);await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));
+ expect(f.store.list()[0].access_role).toBe('source');expect((await f.service.content.setEnabled({workspace_id:a.value.identity.workspace_id,enabled:true,confirm_workspace_id:a.value.identity.workspace_id})).code).toBe('WRITE_ACCESS_DENIED');
+ f.token.mockResolvedValueOnce(a.value);expect((await f.service.refreshOAuth(a.value.identity.workspace_id)).ok).toBe(true);expect(f.store.list()[0].access_role).toBe('source');
+});
 it('rejects missing, wrong, duplicate and non-ASCII state without consuming the valid authorization', async () => {
   const f = await fixture(), a = f.grant(), url = await f.start(), state = url.searchParams.get('state')!;
   for (const bad of [null, randomUUID(), 'é'.repeat(43)]) expect((await f.callback(bad, a.code)).status).toBe(400);

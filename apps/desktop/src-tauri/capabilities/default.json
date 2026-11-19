@@ -3,5 +3,5 @@
   "identifier": "main-capability",
   "description": "Local LV999 main window and typed management commands. No shell, filesystem or network plugins.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default","core:window:allow-minimize","core:window:allow-toggle-maximize","core:window:allow-close","core:window:allow-start-dragging","core:window:allow-is-maximized"]
 }

@@ -55,24 +55,27 @@ export class Service {
     this.vaultReady = await this.vault.probe();
     this.store.log({ level: 'info', action: 'Backend started', workspace_id: null, code: 'OK' });
   }
-  private assertAllowedWorkspace(name: string,id?:string) {
+  private assertAllowedWorkspace(name: string,id?:string,role?:'source'|'target') {
+    if(projectNameLookup(name)==='honour')throw new DomainError('PROTECTED_WORKSPACE','Honour remains protected.');
     if(isProtectedWorkspaceName(name)||(id&&this.store.isProtected(id))){
       if(id)this.store.protect(id);
-      throw new DomainError('PROTECTED_WORKSPACE','Vibecode and Honour are protected source Workspaces. No page/content request is allowed.');
+      if(role!=='source')throw new DomainError('PROTECTED_WORKSPACE','This protected Workspace requires an explicit read-only source connection.');
     }
   }
-  private confirmEnvironment(input:{environment:WorkspaceEnvironmentId;expected_workspace_name?:string},identity:Identity){
+  private confirmEnvironment(input:{environment:WorkspaceEnvironmentId;expected_workspace_name?:string;access_role?:'source'|'target'},identity:Identity){
+    if(input.access_role==='source'&&(input.environment!=='production'||projectNameLookup(identity.workspace_name)!=='vibecode'))throw new DomainError('WORKSPACE_MISMATCH','Only the explicitly authorized Vibecode source may use read-only source mode.');
     if(input.environment==='production'&&(!input.expected_workspace_name||projectNameLookup(input.expected_workspace_name)!==projectNameLookup(identity.workspace_name)))
       throw new DomainError('WORKSPACE_MISMATCH','Production authorization must match the exact expected Notion Workspace name. Nothing was saved and no content request was sent.');
   }
-  private async identity(adapter: NotionAdapter, expectedId?: string) {
+  private async identity(adapter: NotionAdapter, expectedId?: string,role?:'source'|'target') {
     const parsed = z.object({ workspace_id: z.uuid(), workspace_name: z.string().trim().min(1).max(200), bot_id: z.uuid() })
       .safeParse(await adapter.identity());
     if (!parsed.success) throw new DomainError('IDENTITY_UNAVAILABLE', 'Notion did not return a complete workspace identity.');
     const identity = { ...parsed.data, workspace_id: parsed.data.workspace_id.toLowerCase() };
     if (expectedId && identity.workspace_id !== expectedId.toLowerCase())
       throw new DomainError('WORKSPACE_MISMATCH', 'The token belongs to a different workspace. No content request was sent; the previous credential was kept.');
-    this.assertAllowedWorkspace(identity.workspace_name,identity.workspace_id);
+    this.assertAllowedWorkspace(identity.workspace_name,identity.workspace_id,role);
+    if(role==='source'&&projectNameLookup(identity.workspace_name)!=='vibecode')throw new DomainError('WORKSPACE_MISMATCH','The source credential does not belong to Vibecode.');
     return identity;
   }
   private async readAccess(adapter: NotionAdapter): Promise<NonNullable<WorkspaceView['read_access']>> {
@@ -88,14 +91,14 @@ export class Service {
   private async verifiedAdapter(id: string) {
     const config = this.store.list().find(w => w.id === id);
     if (!config) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered Workspace.');
-    this.assertAllowedWorkspace(config.label,id);
+    this.assertAllowedWorkspace(config.label,id,config.access_role);
     const token = await this.vault.read(id);
     if (!token) throw new DomainError('AUTH_REQUIRED', 'No token is stored for this workspace in Windows Credential Manager.');
     const decoded = decodeCredential(token);
     if (decoded.oauth && decoded.oauth.identity.workspace_id.toLowerCase() !== id.toLowerCase())
       throw new DomainError('WORKSPACE_MISMATCH', 'The OAuth credential belongs to a different workspace. Reauthorize this workspace.');
     const adapter = this.makeAdapter(decoded.token, decoded.oauth);
-    return { adapter, identity: await this.identity(adapter, id), authKind: decoded.oauth ? 'oauth' as const : 'internal' as const };
+    return { adapter, identity: await this.identity(adapter, id,config.access_role), authKind: decoded.oauth ? 'oauth' as const : 'internal' as const };
   }
   private failed<T>(id: string | null, action: string, error: unknown, updateStatus = true): Result<T> {
     const failure = safeError(error);
@@ -146,15 +149,15 @@ export class Service {
       if (!parsed.success) throw new DomainError('INVALID_INPUT', 'Enter a token, a display name of at most 80 characters, and confirm this is a Workspace.');
       if(parsed.data.environment==='production'&&!parsed.data.expected_workspace_name)throw new DomainError('INVALID_INPUT','Enter the exact expected Notion Workspace name for a production target.');
       const { label, token } = parsed.data;
-      this.assertAllowedWorkspace(label);
+      this.assertAllowedWorkspace(label,undefined,parsed.data.access_role);
       const adapter = this.makeAdapter(token);
-      const identity = await this.identity(adapter);
+      const identity = await this.identity(adapter,undefined,parsed.data.access_role);
       this.confirmEnvironment(parsed.data,identity);
       id = identity.workspace_id;
       if (this.store.list().some(w => w.id === id))
         throw new DomainError('WORKSPACE_EXISTS', 'This workspace is already connected. Use its Reauthorize action to replace the credential.');
       const access = await this.readAccess(adapter);
-      const config = WorkspaceInput.parse({ id, label: label || identity.workspace_name.slice(0, 80), environment: parsed.data.environment });
+      const config = WorkspaceInput.parse({ id, label: label || identity.workspace_name.slice(0, 80), environment: parsed.data.environment,...(parsed.data.access_role==='source'?{access_role:'source'}:{}) });
       await this.saveCredential(config, token, this.proof(identity, access, 'internal'), false);
       return this.connectionReply(id);
     } catch (error) { return this.failed(id, 'Workspace connection failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
@@ -167,22 +170,23 @@ export class Service {
       id = parsed.data.workspace_id.toLowerCase();
       const current = this.store.list().find(w => w.id === id);
       if (!current) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered Workspace.');
-      this.assertAllowedWorkspace(current.label,id);
+      this.assertAllowedWorkspace(current.label,id,current.access_role);
       if(current.environment!==parsed.data.environment)throw new DomainError('WORKSPACE_MISMATCH','Reauthorization cannot change the registered environment.');
+      if((current.access_role??'target')!==(parsed.data.access_role??'target'))throw new DomainError('WORKSPACE_MISMATCH','Reauthorization cannot change the connection role.');
       const adapter = this.makeAdapter(parsed.data.token);
-      const identity = await this.identity(adapter, id);
+      const identity = await this.identity(adapter, id,current.access_role);
       this.confirmEnvironment(parsed.data,identity);
       const access = await this.readAccess(adapter);
       await this.saveCredential(current, parsed.data.token, this.proof(identity, access, 'internal'), true);
       return this.connectionReply(id);
     } catch (error) { return this.failed(id, 'Workspace reauthorization failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
   }
-  private async connectOAuth(credential: OAuthCredential, input: { label: string; workspace_id?: string;environment:WorkspaceEnvironmentId;expected_workspace_name?:string }) {
+  private async connectOAuth(credential: OAuthCredential, input: { label: string; workspace_id?: string;environment:WorkspaceEnvironmentId;expected_workspace_name?:string;access_role?:'source'|'target' }) {
     let id: string | null = null;
     try {
-      this.assertAllowedWorkspace(input.label);
+      this.assertAllowedWorkspace(input.label,undefined,input.access_role);
       const adapter = this.makeAdapter(credential.access_token, credential);
-      const identity = await this.identity(adapter, input.workspace_id ?? credential.identity.workspace_id);
+      const identity = await this.identity(adapter, input.workspace_id ?? credential.identity.workspace_id,input.access_role);
       this.confirmEnvironment(input,identity);
       id = identity.workspace_id;
       const current = this.store.list().find(w => w.id === id);
@@ -190,8 +194,9 @@ export class Service {
         throw new DomainError('WORKSPACE_EXISTS', 'This workspace is already connected. Select its Reauthorize action to replace the credential.');
       if (input.workspace_id && !current) throw new DomainError('UNKNOWN_WORKSPACE', 'The workspace is no longer registered.');
       if(current&&current.environment!==input.environment)throw new DomainError('WORKSPACE_MISMATCH','Reauthorization cannot change the registered environment.');
+      if(current&&(current.access_role??'target')!==(input.access_role??'target'))throw new DomainError('WORKSPACE_MISMATCH','Reauthorization cannot change the connection role.');
       const access = await this.readAccess(adapter);
-      const config = current ?? WorkspaceInput.parse({ id, label: input.label || identity.workspace_name.slice(0, 80), environment: input.environment });
+      const config = current ?? WorkspaceInput.parse({ id, label: input.label || identity.workspace_name.slice(0, 80), environment: input.environment,...(input.access_role==='source'?{access_role:'source'}:{}) });
       await this.saveCredential(config, encodeCredential(credential), this.proof(identity, access, 'oauth'), Boolean(input.workspace_id));
       return this.connectionReply(id);
     } catch (error) { return this.failed<WorkspaceView>(id, 'Workspace OAuth connection failed', error, error instanceof DomainError && error.code === 'CREDENTIAL_STATE_UNCERTAIN'); }
@@ -202,7 +207,7 @@ export class Service {
       const current = this.store.list().find(w => w.id === id);
       if (!current) throw new DomainError('UNKNOWN_WORKSPACE', 'Select a registered Workspace.');
       if (current.auth_kind !== 'oauth') throw new DomainError('INVALID_INPUT', 'This workspace uses an Internal Connection. Use Reauthorize to replace its token.');
-      this.assertAllowedWorkspace(current.label,id);
+      this.assertAllowedWorkspace(current.label,id,current.access_role);
       if (!this.store.acquireConnection(id, owner)) throw new DomainError('CONNECTION_BUSY', 'Another instance is updating this connection.');
       locked = true;
       const raw = await this.vault.read(id), previous = raw ? decodeCredential(raw).oauth : undefined;
@@ -214,7 +219,7 @@ export class Service {
       refreshed = true;
       if (credential.identity.workspace_id.toLowerCase() !== id.toLowerCase() || credential.identity.bot_id !== previous.identity.bot_id)
         throw new DomainError('WORKSPACE_MISMATCH', 'The refreshed token returned a different workspace or connection identity. Reauthorize this workspace.');
-      const adapter = this.makeAdapter(credential.access_token, credential), identity = await this.identity(adapter, id), access = await this.readAccess(adapter);
+      const adapter = this.makeAdapter(credential.access_token, credential), identity = await this.identity(adapter, id,current.access_role), access = await this.readAccess(adapter);
       const encoded = encodeCredential(credential);
       await this.vault.write(id, encoded);
       if (await this.vault.read(id) !== encoded) throw new Error();
@@ -293,6 +298,7 @@ export class Service {
     if (!parsed.success) return result<ProjectRoute>(null, null, 'INVALID_INPUT', ['Provide a unique project key, name, workspace, page ID and expected route revision.']);
     const value = parsed.data;
     try {
+      if(this.store.list().find(w=>w.id===value.workspace_id)?.access_role==='source')throw new DomainError('WRITE_ACCESS_DENIED','A source connection cannot be a project destination.');
       const root = await this.rootPage(value.workspace_id, value.root_page_id);
       const route = this.store.saveProject(value, root);
       if (!route) throw new DomainError('ROUTE_CONFLICT', 'This project key was added or changed by another editor. Refresh the mappings and reopen the editor; nothing was overwritten.');
@@ -340,7 +346,7 @@ export class Service {
         { key: 'runtime', label: 'Node runtime', status: 'pass', detail: `${process.version} · ${process.arch}` },
         { key: 'vault', label: 'Credential vault', status: this.vaultReady ? 'pass' : 'error', detail: this.vaultReady ? 'Windows Credential Manager available' : 'Windows Credential Manager unavailable' },
         { key: 'notion', label: 'Notion connections', status: workspaces.length > 0 && workspaces.every(w => w.status === 'Connected') ? 'pass' : 'pending',
-          detail: `${workspaces.filter(w => w.status === 'Connected').length} verified / ${workspaces.length} configured · ${workspaces.filter(w=>w.environment==='production').length} production targets` },
+          detail: `${workspaces.filter(w => w.status === 'Connected').length} verified / ${workspaces.length} configured · ${workspaces.filter(w=>w.environment==='production'&&w.access_role!=='source').length} production targets` },
         { key: 'transport', label: 'Management transport', status: 'pass', detail: 'Private process pipes · OAuth callback listens only during authorization on localhost:8765' },
       ],
       workspaces, activity: this.store.activity(), projects: this.store.projects(),

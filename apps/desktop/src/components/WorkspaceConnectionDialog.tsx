@@ -6,12 +6,13 @@ type Props = {
   busy: boolean;
   failure: string | null;
   onClose: () => void;
-  onSubmit: (label: string, token: string,environment:WorkspaceEnvironmentId,expectedName?:string) => Promise<void>;
+  onSubmit: (label: string, token: string,environment:WorkspaceEnvironmentId,expectedName?:string,role?:'source'|'target') => Promise<void>;
 };
 
 export function WorkspaceConnectionDialog({ workspace, busy, failure, onClose, onSubmit }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [environment,setEnvironment]=useState<WorkspaceEnvironmentId>(workspace?.environment??'production');
+  const [accessRole,setAccessRole]=useState<'source'|'target'>(workspace?.access_role??'target');
   useEffect(() => {
     dialog.current?.showModal();
     return () => dialog.current?.close();
@@ -27,7 +28,7 @@ export function WorkspaceConnectionDialog({ workspace, busy, failure, onClose, o
     // Uncontrolled password field: never place a token in React state, storage or feedback.
     tokenInput.value = '';
     const expected=(form.elements.namedItem('expected_workspace_name') as HTMLInputElement|null)?.value.trim();
-    void onSubmit(labelInput?.value ?? '', token,environment,expected||undefined);
+    void onSubmit(labelInput?.value ?? '', token,environment,expected||undefined,accessRole);
   }
 
   function keepFocus(event: KeyboardEvent<HTMLDialogElement>) {
@@ -46,9 +47,9 @@ export function WorkspaceConnectionDialog({ workspace, busy, failure, onClose, o
     onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
     <form onSubmit={submit} autoComplete="off">
       <h2 id="connection-title">{workspace ? 'Reauthorize workspace' : 'Connect workspace'}</h2>
-      <p>{workspace ? 'The replacement token must belong to this exact workspace. The current credential is kept if validation fails.'
-        : 'LV999 verifies the Notion identity before saving. Production targets start read-only; Vibecode and Honour remain protected.'}</p>
-      <label className="form-field">Environment<select aria-label="Connection environment" value={environment} disabled={busy||Boolean(workspace)} onChange={e=>setEnvironment(e.target.value as WorkspaceEnvironmentId)}><option value="production">Production target</option><option value="test">Test</option></select></label>
+      {workspace?<p>The replacement must belong to this exact Workspace.</p>:null}
+      <label className="form-field">Connection<select aria-label="Connection role" value={accessRole} disabled={busy||Boolean(workspace)} onChange={e=>{setAccessRole(e.target.value as 'source'|'target');if(e.target.value==='source')setEnvironment('production');}}><option value="target">Target Workspace</option><option value="source">Vibecode · read-only source</option></select></label>
+      <label className="form-field">Environment<select aria-label="Connection environment" value={environment} disabled={busy||Boolean(workspace)||accessRole==='source'} onChange={e=>setEnvironment(e.target.value as WorkspaceEnvironmentId)}><option value="production">Production</option><option value="test">Test</option></select></label>
       {environment==='production'?<label className="form-field">Expected Notion Workspace name<input name="expected_workspace_name" required maxLength={200} defaultValue={workspace?.verified_name??''} disabled={busy}/></label>:null}
       {workspace ? <div className="connection-target"><strong>{workspace.label}</strong><span className="mono">{workspace.id}</span></div>
         : <label className="form-field">Display name <span className="field-hint">Optional · defaults to the Notion workspace name</span>
@@ -59,7 +60,7 @@ export function WorkspaceConnectionDialog({ workspace, busy, failure, onClose, o
       </label>
       <p className="field-hint">Saved only in Windows Credential Manager after verification. Do not paste tokens into a chat.</p>
       <label className="test-confirm"><input name="test_confirm" type="checkbox" required disabled={busy} />
-        <span>{environment==='test'?'This is a test workspace. It is not Vibecode or Honour.':'This is an authorized production target. Connect read-only; do not access Vibecode or Honour.'}</span></label>
+        <span>{accessRole==='source'?'Authorize Vibecode as a read-only migration source.':environment==='test'?'This is a test workspace. It is not Vibecode or Honour.':'Authorize this production target. General writes start disabled.'}</span></label>
       {failure ? <div role="alert" className="form-error">{failure}</div> : null}
       {busy ? <p role="status">Checking workspace identity and read access, then saving securely…</p> : null}
       <div className="dialog-actions"><button type="button" disabled={busy} onClick={onClose}>Cancel</button>

@@ -42,7 +42,7 @@ export function ProjectRouting({ data, refresh, openChat }: { data: Snapshot; re
     finally { setBusy(false); }
   }
   return <>
-    <div className="section-toolbar"><p>Each key selects one workspace and one root page. Stored mappings are configuration; use Check route for a fresh access check.</p>
+    <div className="section-toolbar">
       <button className="primary" disabled={busy || !data.capabilities.routing || !data.workspaces.length} onClick={() => open()}>Add mapping</button></div>
     {!data.workspaces.length ? <p className="hint">Connect a Workspace before adding a mapping.</p> : null}
     {notice ? <p role="status" className="notice">{notice}</p> : null}
@@ -60,12 +60,12 @@ export function ProjectRouting({ data, refresh, openChat }: { data: Snapshot; re
           <dt>Saved validation</dt><dd>{new Date(route.validated_at).toLocaleString()}</dd></dl>
         {sameName.length ? <p className="notice">Name also used by {sameName.map(other => other.project_key).join(', ')}. Name-based resolution is ambiguous; use a key.</p> : null}
         <div className="workspace-actions"><button disabled={busy} onClick={() => open(route)}>Edit mapping</button><button disabled={busy} onClick={() => void resolve(route.project_key)}>Check route</button><button disabled={busy} onClick={() => openChat({ project_key: route.project_key })}>Open project chat</button></div>
-        <div className="message-board-summary"><h3>Notion 留言板</h3>{board?<><p>{board.enabled?'MCP append enabled':'MCP posting paused'} · no automatic turns</p><p className="mono">{board.url??board.page_id}</p><div className="workspace-actions"><button disabled={busy} onClick={()=>{if(!navigator.clipboard){setFailure('Copy unavailable. Use the link above.');return;}void navigator.clipboard.writeText(board.url??`https://app.notion.com/p/${board.page_id.replaceAll('-','')}`).then(()=>setNotice('Message-board link copied.'),()=>setFailure('Copy unavailable. Use the link above.'));}}>Copy board link</button><button disabled={busy} onClick={()=>void boardAction(route,!board.enabled)}>{board.enabled?'Pause board posting':'Enable board posting'}</button></div></>:<><p>Create one ordinary child page under this project root. Its granted MCP clients can append messages; other production content keeps its existing permissions.</p><button disabled={busy} onClick={()=>void boardAction(route)}>Create / verify message board</button></>}</div>
+        <div className="message-board-summary"><h3>Notion 留言板</h3>{board?<><p>{board.enabled?'MCP append enabled':'MCP posting paused'} · no automatic turns</p><p className="mono">{board.url??board.page_id}</p><div className="workspace-actions"><button disabled={busy} onClick={()=>{if(!navigator.clipboard){setFailure('Copy unavailable. Use the link above.');return;}void navigator.clipboard.writeText(board.url??`https://app.notion.com/p/${board.page_id.replaceAll('-','')}`).then(()=>setNotice('Message-board link copied.'),()=>setFailure('Copy unavailable. Use the link above.'));}}>Copy board link</button><button disabled={busy} onClick={()=>void boardAction(route,!board.enabled)}>{board.enabled?'Pause board posting':'Enable board posting'}</button></div></>:<><button disabled={busy} onClick={()=>void boardAction(route)}>Create / verify message board</button></>}</div>
       </section>;
     })}</div> : <EmptyState title={data.projects.length ? 'No matching mappings' : 'No project routes configured'}>Add an exact project key, workspace and inspected root page.</EmptyState>}
-    <section className="name-resolution"><h2>Resolve a project name</h2><p>Names must match exactly and be unique. Duplicate names are rejected before reading any workspace.</p>
+    <section className="name-resolution"><h2>Resolve a project name</h2>
       <div className="page-search"><label>Exact project name<input aria-label="Exact project name" maxLength={80} value={resolveName} onChange={event => setResolveName(event.target.value)} /></label>
         <button disabled={busy || !resolveName.trim()} onClick={() => void resolve()}>Resolve name</button></div></section>
-    {dialog ? <ProjectRouteDialog workspaces={data.workspaces} routes={data.projects} route={dialog.route} busy={busy} failure={failure} onClose={() => setDialog(null)} onSave={save} refresh={refresh} /> : null}
+    {dialog ? <ProjectRouteDialog workspaces={data.workspaces.filter(w=>w.access_role!=='source')} routes={data.projects} route={dialog.route} busy={busy} failure={failure} onClose={() => setDialog(null)} onSave={save} refresh={refresh} /> : null}
   </>;
 }

@@ -132,6 +132,19 @@ function candidate(f: ReturnType<typeof fixture>, id = randomUUID()) {
 }
 
 describe('GUI connection and credential replacement', () => {
+  it('enrolls an explicit Vibecode read-only source and refuses every content-write path',async()=>{
+    const f=fixture(),c=candidate(f);c.adapter.identity.mockImplementation(async()=>({workspace_id:c.id,workspace_name:'Vibecode',bot_id:randomUUID()}));
+    const connected=await f.service.connectWorkspace({...c.input,environment:'production',access_role:'source',expected_workspace_name:'Vibecode'});
+    expect(connected.ok).toBe(true);expect(connected.data?.access_role).toBe('source');expect((await f.service.search(c.id,'')).ok).toBe(true);
+    expect((await f.service.content.setEnabled({workspace_id:c.id,enabled:true,confirm_workspace_id:c.id})).code).toBe('WRITE_ACCESS_DENIED');
+    expect((await f.service.content.execute({target:{workspace_id:c.id},operation:{kind:'create_page',parent_page_id:randomUUID(),title:'Forbidden',text:''},idempotency_key:randomUUID()},{actor:'human',write_workspace_ids:'owner',limited_board:{create_parent_id:randomUUID(),validate:()=>{}}})).code).toBe('WRITE_ACCESS_DENIED');
+    expect((await f.service.saveProject({project_key:'SRC',name:'Wrong destination',workspace_id:c.id,root_page_id:randomUUID(),expected_revision:0})).code).toBe('WRITE_ACCESS_DENIED');
+    expect((await f.service.reauthorizeWorkspace({workspace_id:c.id,token:c.token,environment:'production',expected_workspace_name:'Vibecode'})).code).toBe('WORKSPACE_MISMATCH');
+  });
+  it('does not treat a source role as permission to connect Honour or another source',async()=>{
+    const f=fixture(),c=candidate(f);c.adapter.identity.mockImplementation(async()=>({workspace_id:c.id,workspace_name:'Honour',bot_id:randomUUID()}));
+    expect((await f.service.connectWorkspace({...c.input,environment:'production',access_role:'source',expected_workspace_name:'Honour'})).code).toBe('PROTECTED_WORKSPACE');expect(c.adapter.search).not.toHaveBeenCalled();
+  });
   it('discovers the real identity and proves read access before writing a credential', async () => {
     const f = fixture(), c = candidate(f);
     const reply = await f.service.connectWorkspace(c.input);

@@ -11,6 +11,7 @@ export const WorkspaceInput = z.object({
   id: z.uuid(),
   label: z.string().trim().min(1).max(80),
   environment: WorkspaceEnvironment,
+  access_role:z.enum(['target','source']).optional(),
 }).strict();
 export type WorkspaceConfig = z.infer<typeof WorkspaceInput>;
 export const WorkspaceRef = z.object({ workspace_id: z.uuid().transform(id => id.toLowerCase()) }).strict();
@@ -19,6 +20,7 @@ export const ConnectWorkspaceInput = z.object({
   token: z.string().trim().min(1).max(2048),
   environment: WorkspaceEnvironment,
   expected_workspace_name:ExpectedWorkspaceName.optional(),
+  access_role:z.enum(['target','source']).optional(),
 }).strict();
 export const ReauthorizeWorkspaceInput = ConnectWorkspaceInput.omit({ label: true }).extend({ workspace_id: z.uuid() });
 export type ConnectWorkspaceRequest = z.infer<typeof ConnectWorkspaceInput>;
@@ -27,6 +29,7 @@ export const OAuthConfigInput = z.object({ client_id: z.uuid().transform(id => i
   client_secret: z.string().trim().min(1).max(500).optional() }).strict();
 export const OAuthStartInput = z.object({ label: z.string().trim().max(80).default(''), environment: WorkspaceEnvironment,
   expected_workspace_name:ExpectedWorkspaceName.optional(),
+  access_role:z.enum(['target','source']).optional(),
   workspace_id: z.uuid().transform(id => id.toLowerCase()).optional() }).strict();
 export type OAuthStatus = { configured: boolean; client_id: string | null; redirect_uri: string;
   phase: 'idle' | 'awaiting' | 'exchanging' | 'complete' | 'failed' | 'cancelled' | 'expired';

@@ -17,7 +17,7 @@ export const executeMutation=(input:Mutation&{approval?:{plan_id:string;plan_has
 export const pendingMutations=()=>invoke<Result<{plans:(MutationPlan&{actor:string})[];operations:any[]}>>('content_request',{method:'pending_mutations',input:{}});
 export const oauthStatus = () => invoke<Result<OAuthStatus>>('oauth_request', { method: 'oauth_status', input: {} });
 export const configureOAuth = (input: { client_id: string; client_secret?: string }) => invoke<Result<OAuthStatus>>('oauth_request', { method: 'configure_oauth', input });
-export const startOAuth = (input: { label: string; environment: 'test'|'production'; workspace_id?: string;expected_workspace_name?:string }) => invoke<Result<{authorization_url:string}>>('oauth_request', { method: 'start_oauth', input });
+export const startOAuth = (input: { label: string; environment: 'test'|'production'; workspace_id?: string;expected_workspace_name?:string;access_role?:'source'|'target' }) => invoke<Result<{authorization_url:string}>>('oauth_request', { method: 'start_oauth', input });
 export const cancelOAuth = () => invoke<Result<OAuthStatus>>('oauth_request', { method: 'cancel_oauth', input: {} });
 export const refreshOAuth = (workspaceId: string) => invoke<Result<WorkspaceView>>('oauth_request', { method: 'refresh_oauth', input: { workspace_id: workspaceId } });
 export const openNotionAuthorization = (url: string) => invoke<void>('open_notion_authorization', { url });

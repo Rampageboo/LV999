@@ -9,6 +9,7 @@ import { Chats, type ChatSelection } from './screens/Chats.js';
 import { ProjectRouting } from './screens/ProjectRouting.js';
 import { NavIcon } from './components/NavIcon.js';
 import { Content } from './screens/Content.js';
+import {TitleBar} from './components/TitleBar.js';
 
 const pages = [
   ['Dashboard', '⌂', 'Your Notion connections, in one place.'],
@@ -53,5 +54,5 @@ export function App() {
       case 'Settings': content = <Settings data={data} />; break;
     }
   }
-  return <div className="app-shell"><aside><div className="brand">LV999</div><nav aria-label="Main navigation">{pages.map(([name]) => <button key={name} aria-current={page === name ? 'page' : undefined} className={page === name ? 'selected' : ''} onClick={() => setPage(name)}><NavIcon name={name} />{name}</button>)}</nav><div className="sidebar-footer">Local workspace console</div></aside><main id="main-content" className={page === 'Chats' ? 'chat-main' : undefined}><header><div><h1>{page}</h1><p>{pages.find(([name]) => name === page)?.[2]}</p></div><button className="primary" disabled={loading} onClick={() => void refresh()}><span aria-hidden="true">↻</span> {loading ? 'Checking…' : 'Refresh status'}</button></header>{error ? <div role="alert" className="backend-error"><h2>Backend unavailable</h2><p>{error}</p><p>Connection status is unknown. Refresh after restoring the desktop backend.</p></div> : null}{!data && !error ? <p role="status">Checking the local backend…</p> : content}{data ? <div className="snapshot-time">Last refreshed {new Date(data.captured_at).toLocaleTimeString()}</div> : null}</main></div>;
+  return <div className="desktop-frame"><TitleBar page={page}/><div className="app-shell"><aside><div className="brand">LV999</div><nav aria-label="Main navigation">{pages.map(([name]) => <button key={name} aria-current={page === name ? 'page' : undefined} className={page === name ? 'selected' : ''} onClick={() => setPage(name)}><NavIcon name={name} />{name}</button>)}</nav></aside><main id="main-content" className={page === 'Chats' ? 'chat-main' : undefined}><header><h1>{page}</h1><button className="primary" disabled={loading} onClick={() => void refresh()}><span aria-hidden="true">↻</span> {loading ? 'Checking…' : 'Refresh'}</button></header>{error ? <div role="alert" className="backend-error"><h2>Backend unavailable</h2><p>{error}</p></div> : null}{!data && !error ? <p role="status">Loading…</p> : content}{data ? <div className="snapshot-time">{new Date(data.captured_at).toLocaleTimeString()}</div> : null}</main></div></div>;
 }
