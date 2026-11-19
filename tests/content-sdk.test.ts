@@ -2,6 +2,12 @@ import {randomUUID} from 'node:crypto';
 import {expect,it} from 'vitest';
 import {OfficialNotionAdapter} from '../apps/server/src/notion/adapter.js';
 import {richText} from '../apps/server/src/notion/content-adapter.js';
+it('preserves a copied emoji icon and refuses an unverified icon',async()=>{
+ const page=randomUUID();let body:any,wrong=false;
+ const adapter=new OfficialNotionAdapter(randomUUID(),async(input,init)=>{const request=new Request(input,init);if(request.method==='POST')body=await request.json();return Response.json({object:'page',id:page,in_trash:false,properties:{title:{type:'title',title:richText('Project')}},icon:{type:'emoji',emoji:wrong?'❓':'🌀'}});});
+ const operation={kind:'create_page' as const,parent_page_id:randomUUID(),title:'Project',text:'',icon:{type:'emoji' as const,emoji:'🌀'}};
+ expect((await adapter.content.apply(operation,()=>{})).readback_verified).toBe(true);expect(body.icon).toEqual(operation.icon);wrong=true;await expect(adapter.content.apply(operation,()=>{})).rejects.toMatchObject({code:'READBACK_FAILED'});
+});
 it('keeps Unicode characters intact at rich-text chunk boundaries',()=>{const text='x'.repeat(1999)+'😀'+'尾'.repeat(2100),parts=richText(text);expect(parts.map(p=>p.text.content).join('')).toBe(text);expect(parts.every(p=>p.text.content.length<=2000&&!/[\uD800-\uDBFF]$/.test(p.text.content)&&! /^[\uDC00-\uDFFF]/.test(p.text.content))).toBe(true);});
 
 it('sends recoverable deletion through the pinned SDK and checks the returned target',async()=>{

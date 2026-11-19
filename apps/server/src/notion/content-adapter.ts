@@ -87,13 +87,13 @@ export class OfficialContentAdapter implements ContentAdapter {
   async apply(op:MutationOp,known:(result:MutationResult)=>void,resource?:any):Promise<MutationResult>{
     let raw:any;let details:Record<string,unknown>={};
     switch(op.kind){
-      case'create_page':raw=await this.client.pages.create({parent:{page_id:op.parent_page_id},properties:{title:{title:richText(op.title)}},children:paragraphs(op.text)});break;
+      case'create_page':raw=await this.client.pages.create({parent:{page_id:op.parent_page_id},properties:{title:{title:richText(op.title)}},children:paragraphs(op.text),...(op.icon?{icon:op.icon as any}:{})});break;
       case'update_page':{
         const current=resource??await this.resource('page',op.page_id);
         const titleKey=Object.entries(current.properties??{}).find(([,p]:any)=>p.type==='title')?.[0]??'title';
         raw=await this.client.pages.update({page_id:op.page_id,properties:{...op.properties,...(op.title?{[titleKey]:{title:richText(op.title)}}:{})} as any});break;
       }
-      case'create_record':raw=await this.client.pages.create({parent:{type:'data_source_id',data_source_id:op.data_source_id},properties:op.properties as any,children:paragraphs(op.text)});break;
+      case'create_record':raw=await this.client.pages.create({parent:{type:'data_source_id',data_source_id:op.data_source_id},properties:op.properties as any,children:paragraphs(op.text),...(op.icon?{icon:op.icon as any}:{})});break;
       case'update_record':raw=await this.client.pages.update({page_id:op.page_id,properties:op.properties as any});break;
       case'append_blocks':{
         const appended=await this.client.blocks.children.append({block_id:op.page_id,children:op.blocks as any});
@@ -146,6 +146,7 @@ export class OfficialContentAdapter implements ContentAdapter {
       if(okay&&(op.kind==='create_page'||op.kind==='create_record')&&op.text){
         const batch=await this.children(raw.id);okay=batch.results.filter((b:any)=>b.type==='paragraph').map((b:any)=>textOf(b.paragraph?.rich_text??[])).join('\n')===op.text;
       }
+      if(okay&&(op.kind==='create_page'||op.kind==='create_record')&&op.icon)okay=raw.icon?.type==='emoji'&&raw.icon.emoji===op.icon.emoji;
     }
     if(!okay)throw new DomainError('READBACK_FAILED','Notion accepted the request but read-back did not confirm the change. Retry verification with the same key; do not repeat the write.');
     return{...result,url:raw?.url??result.url,last_edited_time:raw?.last_edited_time??result.last_edited_time,readback_verified:true};
