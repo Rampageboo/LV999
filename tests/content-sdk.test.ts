@@ -2,6 +2,17 @@ import {randomUUID} from 'node:crypto';
 import {expect,it} from 'vitest';
 import {OfficialNotionAdapter} from '../apps/server/src/notion/adapter.js';
 import {richText} from '../apps/server/src/notion/content-adapter.js';
+it('accepts equivalent explicit datetime offsets while rejecting a different instant',async()=>{
+ const page=randomUUID();let shifted=false;
+ const expected={Name:{title:richText('Example')},When:{date:{start:'2030-01-01T10:00:00.000Z',end:'2030-01-01T12:00:00.000Z'}}};
+ const adapter=new OfficialNotionAdapter(randomUUID(),async()=>Response.json({object:'page',id:page,in_trash:false,properties:{Name:{type:'title',title:richText('Example')},When:{type:'date',date:{start:shifted?'2030-01-01T10:00:01.000+00:00':'2030-01-01T10:00:00.000+00:00',end:'2030-01-01T14:00:00.000+02:00',time_zone:null}}}}));
+ const op={kind:'create_record' as const,data_source_id:randomUUID(),properties:expected,text:''};
+ expect((await adapter.content.apply(op,()=>{})).readback_verified).toBe(true);shifted=true;await expect(adapter.content.apply(op,()=>{})).rejects.toMatchObject({code:'READBACK_FAILED'});
+});
+it('keeps calendar dates distinct from midnight timestamps during readback',async()=>{
+ const page=randomUUID(),adapter=new OfficialNotionAdapter(randomUUID(),async()=>Response.json({object:'page',id:page,in_trash:false,properties:{When:{type:'date',date:{start:'2030-01-01T00:00:00.000Z',end:null,time_zone:null}}}}));
+ await expect(adapter.content.apply({kind:'create_record',data_source_id:randomUUID(),properties:{When:{date:{start:'2030-01-01'}}},text:''},()=>{})).rejects.toMatchObject({code:'READBACK_FAILED'});
+});
 it('preserves a copied emoji icon and refuses an unverified icon',async()=>{
  const page=randomUUID();let body:any,wrong=false;
  const adapter=new OfficialNotionAdapter(randomUUID(),async(input,init)=>{const request=new Request(input,init);if(request.method==='POST')body=await request.json();return Response.json({object:'page',id:page,in_trash:false,properties:{title:{type:'title',title:richText('Project')}},icon:{type:'emoji',emoji:wrong?'❓':'🌀'}});});

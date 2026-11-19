@@ -19,6 +19,7 @@ export const richText=(text:string)=>{
 };
 const paragraphs=(text:string)=>text?text.split('\n').map(line=>({object:'block' as const,type:'paragraph' as const,paragraph:{rich_text:richText(line)}})):[];
 const textOf=(parts:any[])=>parts.map(part=>part.plain_text??part.text?.content??'').join('');
+const comparableDate=(value:unknown)=>typeof value==='string'&&/T.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():value;
 function comparable(value:any):unknown {
   if(!value||typeof value!=='object')return value;
   const kind=value.type??['title','rich_text','relation','files','people','select','multi_select','status','number','checkbox','date','url','email','phone_number'].find(key=>key in value);
@@ -28,7 +29,7 @@ function comparable(value:any):unknown {
   if(kind==='files')return (data??[]).map((item:any)=>item.name??'').sort();
   if(kind==='multi_select')return (data??[]).map((item:any)=>item.name??item.id).sort();
   if(['select','status'].includes(kind))return data?.name??data?.id??null;
-  if(kind==='date')return data?{start:data.start,end:data.end??null,time_zone:data.time_zone??null}:null;
+  if(kind==='date')return data?{start:comparableDate(data.start),end:comparableDate(data.end??null),time_zone:data.time_zone??null}:null;
   return data;
 }
 function propertiesMatch(actual:any,expected:Record<string,unknown>){
