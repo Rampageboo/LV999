@@ -2,6 +2,13 @@ import {randomUUID} from 'node:crypto';
 import {expect,it} from 'vitest';
 import {OfficialNotionAdapter} from '../apps/server/src/notion/adapter.js';
 import {richText} from '../apps/server/src/notion/content-adapter.js';
+it('omits null response-only paragraph icons without changing the journaled block request',async()=>{
+ const page=randomUUID(),block=randomUUID();let body:any;
+ const source:any={object:'block',type:'paragraph',paragraph:{rich_text:richText('Outer'),icon:null,children:[{object:'block',type:'paragraph',paragraph:{rich_text:richText('Child'),icon:null}},{object:'block',type:'paragraph',paragraph:{rich_text:richText('Icon'),icon:{type:'emoji',emoji:'🌀'}}}]}};
+ const adapter=new OfficialNotionAdapter(randomUUID(),async(input,init)=>{const request=new Request(input,init);if(request.method==='PATCH'){body=await request.json();return Response.json({results:[{id:block}]});}return Response.json(request.url.endsWith(block)?{id:block,type:'paragraph',paragraph:{rich_text:richText('Outer')},in_trash:false}:{id:page,object:'page'});});
+ expect((await adapter.content.apply({kind:'append_blocks',page_id:page,expected_last_edited_time:'before',blocks:[source]},()=>{})).readback_verified).toBe(true);
+ expect(body.children[0].paragraph).not.toHaveProperty('icon');expect(body.children[0].paragraph.children[0].paragraph).not.toHaveProperty('icon');expect(body.children[0].paragraph.children[1].paragraph.icon).toEqual({type:'emoji',emoji:'🌀'});expect(source.paragraph.icon).toBeNull();
+});
 it('accepts equivalent explicit datetime offsets while rejecting a different instant',async()=>{
  const page=randomUUID();let shifted=false;
  const expected={Name:{title:richText('Example')},When:{date:{start:'2030-01-01T10:00:00.000Z',end:'2030-01-01T12:00:00.000Z'}}};

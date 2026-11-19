@@ -54,6 +54,22 @@ it('returns a verified prior result for the same retry key without sending a sec
   expect(first.ok).toBe(true);expect(second.data?.id).toBe(first.data?.id);expect(f.apply).toHaveBeenCalledTimes(1);
   expect((await f.content.execute({...request,operation:{...request.operation,title:'Changed'} as any})).code).toBe('IDEMPOTENCY_CONFLICT');
 });
+it('retries a known rejected append only after Owner inspection and retains its failed attempt',async()=>{
+ const f=fixture();await f.enable();const request:Mutation={target:{workspace_id:f.a},idempotency_key:randomUUID(),operation:{kind:'append_blocks',page_id:f.rootA,expected_last_edited_time:f.pages.get(f.rootA).last_edited_time,blocks:[{object:'block',type:'paragraph',paragraph:{rich_text:[]}}]}};
+ f.apply.mockRejectedValueOnce(new DomainError('INVALID_INPUT','Validation rejected'));
+ expect((await f.content.execute(request)).code).toBe('INVALID_INPUT');expect((await f.content.execute(request)).code).toBe('CONTENT_CONFLICT');expect(f.apply).toHaveBeenCalledTimes(1);
+ expect((await f.content.reconcileRejectedAppend({request,before_child_ids:[],confirm:true})).ok).toBe(true);expect((await f.content.execute(request)).ok).toBe(true);expect(f.apply).toHaveBeenCalledTimes(2);
+ const review=f.store.db.prepare('SELECT prior FROM content_rejection_reviews').get()!;expect(JSON.parse(String(review.prior))).toMatchObject({state:'FAILED',error_code:'INVALID_INPUT',result:null});expect(f.content.status(request.idempotency_key).data).toMatchObject({state:'APPLIED'});
+});
+it('never reconciles unknown outcomes or known accepted results for resending',async()=>{
+ const f=fixture();await f.enable();f.setUnknown();const request:Mutation={target:{workspace_id:f.a},idempotency_key:randomUUID(),operation:{kind:'append_blocks',page_id:f.rootA,expected_last_edited_time:f.pages.get(f.rootA).last_edited_time,blocks:[{object:'block',type:'paragraph',paragraph:{rich_text:[]}}]}};
+ expect((await f.content.execute(request)).code).toBe('MUTATION_OUTCOME_UNKNOWN');expect((await f.content.reconcileRejectedAppend({request,before_child_ids:[],confirm:true})).ok).toBe(false);expect(f.apply).toHaveBeenCalledTimes(1);expect(f.store.db.prepare('SELECT count(*) AS n FROM content_rejection_reviews').get()?.n).toBe(0);
+});
+it('refuses rejected-append inspection by agents or after target children change',async()=>{
+ const f=fixture();await f.enable();const request:Mutation={target:{workspace_id:f.a},idempotency_key:randomUUID(),operation:{kind:'append_blocks',page_id:f.rootA,expected_last_edited_time:f.pages.get(f.rootA).last_edited_time,blocks:[{object:'block',type:'paragraph',paragraph:{rich_text:[]}}]}};f.apply.mockRejectedValueOnce(new DomainError('INVALID_INPUT','Rejected'));await f.content.execute(request);f.access.mockClear();
+ expect((await f.content.reconcileRejectedAppend({request,before_child_ids:[],confirm:true},{actor:'claude',write_workspace_ids:'owner'})).code).toBe('WRITE_ACCESS_DENIED');expect(f.access).not.toHaveBeenCalled();
+ expect((await f.content.reconcileRejectedAppend({request,before_child_ids:[randomUUID()],confirm:true})).code).toBe('CONTENT_CONFLICT');expect(f.content.status(request.idempotency_key).data).toMatchObject({state:'FAILED'});
+});
 it('rejects stale edits and wrong-Workspace parents before mutation',async()=>{
   const f=fixture();await f.enable();
   expect((await f.content.execute(f.create({operation:{kind:'update_page',page_id:f.rootA,title:'Edit',expected_last_edited_time:'old'}}))).code).toBe('CONTENT_CONFLICT');

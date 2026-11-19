@@ -18,6 +18,13 @@ export const richText=(text:string)=>{
   return parts;
 };
 const paragraphs=(text:string)=>text?text.split('\n').map(line=>({object:'block' as const,type:'paragraph' as const,paragraph:{rich_text:richText(line)}})):[];
+function writableBlock(block:any):any{
+  const body={...block[block.type]};
+  // Current read responses include paragraph.icon=null; the create API expects omission for no icon.
+  if(block.type==='paragraph'&&body.icon===null)delete body.icon;
+  if(Array.isArray(body.children))body.children=body.children.map(writableBlock);
+  return{...block,[block.type]:body};
+}
 const textOf=(parts:any[])=>parts.map(part=>part.plain_text??part.text?.content??'').join('');
 const comparableDate=(value:unknown)=>typeof value==='string'&&/T.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():value;
 function comparable(value:any):unknown {
@@ -97,7 +104,7 @@ export class OfficialContentAdapter implements ContentAdapter {
       case'create_record':raw=await this.client.pages.create({parent:{type:'data_source_id',data_source_id:op.data_source_id},properties:op.properties as any,children:paragraphs(op.text),...(op.icon?{icon:op.icon as any}:{})});break;
       case'update_record':raw=await this.client.pages.update({page_id:op.page_id,properties:op.properties as any});break;
       case'append_blocks':{
-        const appended=await this.client.blocks.children.append({block_id:op.page_id,children:op.blocks as any});
+        const appended=await this.client.blocks.children.append({block_id:op.page_id,children:op.blocks.map(writableBlock) as any});
         raw={id:op.page_id};details={block_ids:appended.results.map(b=>b.id)};break;
       }
       case'update_block':raw=await this.client.blocks.update({...op.body,block_id:op.block_id} as any);break;
