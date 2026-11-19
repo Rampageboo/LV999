@@ -2,6 +2,18 @@ import {randomUUID} from 'node:crypto';
 import {expect,it} from 'vitest';
 import {OfficialNotionAdapter} from '../apps/server/src/notion/adapter.js';
 import {richText} from '../apps/server/src/notion/content-adapter.js';
+it('verifies mention identity instead of its server-resolved display text',async()=>{
+ const page=randomUUID(),block=randomUUID(),mentioned=randomUUID();let wrong=false;
+ const adapter=new OfficialNotionAdapter(randomUUID(),async(input,init)=>{const request=new Request(input,init);if(request.method==='PATCH')return Response.json({results:[{id:block}]});return Response.json(request.url.endsWith(block)?{id:block,type:'paragraph',in_trash:false,paragraph:{rich_text:[{type:'mention',mention:{type:'page',page:{id:wrong?randomUUID():mentioned}},plain_text:'Resolved title'}]}}:{id:page});});
+ const op={kind:'append_blocks' as const,page_id:page,expected_last_edited_time:'before',blocks:[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'mention',mention:{type:'page',page:{id:mentioned}}}]}}]};
+ expect((await adapter.content.apply(op,()=>{})).readback_verified).toBe(true);wrong=true;await expect(adapter.content.apply(op,()=>{})).rejects.toMatchObject({code:'READBACK_FAILED'});
+});
+it('accepts equivalent rich-text chunking but rejects a changed link or formatting',async()=>{
+ const page=randomUUID(),block=randomUUID();let wrongLink=false,wrongStyle=false;
+ const adapter=new OfficialNotionAdapter(randomUUID(),async(input,init)=>{const request=new Request(input,init);if(request.method==='PATCH')return Response.json({results:[{id:block}]});return Response.json(request.url.endsWith(block)?{id:block,type:'paragraph',in_trash:false,paragraph:{rich_text:[{type:'text',text:{content:'same text',link:{url:wrongLink?'https://wrong.example':'https://example.com'}},annotations:{bold:wrongStyle}}]}}:{id:page});});
+ const op={kind:'append_blocks' as const,page_id:page,expected_last_edited_time:'before',blocks:[{object:'block',type:'paragraph',paragraph:{rich_text:['same ','text'].map(content=>({type:'text',text:{content,link:{url:'https://example.com'}}}))}}]};
+ expect((await adapter.content.apply(op,()=>{})).readback_verified).toBe(true);wrongLink=true;await expect(adapter.content.apply(op,()=>{})).rejects.toMatchObject({code:'READBACK_FAILED'});wrongLink=false;wrongStyle=true;await expect(adapter.content.apply(op,()=>{})).rejects.toMatchObject({code:'READBACK_FAILED'});
+});
 it('omits null response-only paragraph icons without changing the journaled block request',async()=>{
  const page=randomUUID(),block=randomUUID();let body:any;
  const source:any={object:'block',type:'paragraph',paragraph:{rich_text:richText('Outer'),icon:null,children:[{object:'block',type:'paragraph',paragraph:{rich_text:richText('Child'),icon:null}},{object:'block',type:'paragraph',paragraph:{rich_text:richText('Icon'),icon:{type:'emoji',emoji:'🌀'}}}]}};

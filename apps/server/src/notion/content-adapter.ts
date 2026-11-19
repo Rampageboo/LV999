@@ -27,11 +27,26 @@ function writableBlock(block:any):any{
 }
 const textOf=(parts:any[])=>parts.map(part=>part.plain_text??part.text?.content??'').join('');
 const comparableDate=(value:unknown)=>typeof value==='string'&&/T.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():value;
+function comparableRichText(parts:any[]){
+  const result:any[]=[];
+  for(const part of parts??[]){
+    const annotations={bold:false,italic:false,strikethrough:false,underline:false,code:false,color:'default',...part.annotations};
+    let item:any;const type=part.type??(part.mention?'mention':part.equation?'equation':'text');
+    if(type==='text')item={type,text:part.text?.content??part.plain_text??'',link:part.text?.link?.url??null,annotations};
+    else if(type==='mention'){
+      const mention=part.mention??{},kind=mention.type??['page','database','user','date','custom_emoji','template_mention'].find(k=>k in mention),value=mention[kind];
+      item={type,mention:kind==='date'?{type:kind,start:comparableDate(value?.start),end:comparableDate(value?.end??null),time_zone:value?.time_zone??null}:['page','database','user','custom_emoji'].includes(kind)?{type:kind,id:value?.id}:{type:kind,value},annotations};
+    }else item={type,equation:part.equation?.expression??null,annotations};
+    const prior=result.at(-1);
+    if(type==='text'&&prior?.type==='text'&&prior.link===item.link&&JSON.stringify(prior.annotations)===JSON.stringify(item.annotations))prior.text+=item.text;
+    else result.push(item);
+  }return result;
+}
 function comparable(value:any):unknown {
   if(!value||typeof value!=='object')return value;
   const kind=value.type??['title','rich_text','relation','files','people','select','multi_select','status','number','checkbox','date','url','email','phone_number'].find(key=>key in value);
   const data=value[kind];
-  if(['title','rich_text'].includes(kind))return textOf(data??[]);
+  if(['title','rich_text'].includes(kind))return comparableRichText(data??[]);
   if(['relation','people'].includes(kind))return [...new Set((data??[]).map((item:any)=>item.id))].sort();
   if(kind==='files')return (data??[]).map((item:any)=>item.name??'').sort();
   if(kind==='multi_select')return (data??[]).map((item:any)=>item.name??item.id).sort();
@@ -135,7 +150,7 @@ export class OfficialContentAdapter implements ContentAdapter {
     let raw:any,okay=false;
     if(op.kind==='append_blocks'){
       const ids=result.details.block_ids as string[];okay=ids?.length===op.blocks.length;
-      if(okay)for(let i=0;i<ids.length;i++){const block=await this.resource('block',ids[i]);const expected=op.blocks[i] as any;if(block.in_trash||block.type!==expected.type||('rich_text'in(expected[expected.type]??{})&&textOf(block[block.type]?.rich_text??[])!==textOf(expected[expected.type].rich_text)))okay=false;}
+      if(okay)for(let i=0;i<ids.length;i++){const block=await this.resource('block',ids[i]);const expected=op.blocks[i] as any;if(block.in_trash||block.type!==expected.type||('rich_text'in(expected[expected.type]??{})&&JSON.stringify(comparableRichText(block[block.type]?.rich_text??[]))!==JSON.stringify(comparableRichText(expected[expected.type].rich_text))))okay=false;}
       raw=await this.resource('page',result.id);
     }else if(op.kind==='upload_file'){
       const upload=await this.resource('upload',String(result.details.file_upload_id));
@@ -150,7 +165,7 @@ export class OfficialContentAdapter implements ContentAdapter {
       else if(op.kind==='create_database')okay=!raw.in_trash&&textOf(raw.title??[])===op.title&&(raw.data_sources?.length??0)>0;
       else if(op.kind==='create_data_source'||op.kind==='update_data_source')okay=!raw.in_trash&&(!op.title||textOf(raw.title??[])===op.title)&&Object.entries(op.properties).every(([key,value]:any)=>value===null?!raw.properties?.[key]:Boolean(raw.properties?.[value?.name??key]));
       else if(op.kind==='create_view')okay=raw.name===op.name&&raw.type===op.view_type;
-      else if(op.kind==='update_block'){const type=raw.type;okay=!raw.in_trash&&Boolean(op.body[type])&&(!('rich_text'in(op.body[type] as any))||textOf(raw[type]?.rich_text??[])===textOf((op.body[type] as any).rich_text));}
+      else if(op.kind==='update_block'){const type=raw.type;okay=!raw.in_trash&&Boolean(op.body[type])&&(!('rich_text'in(op.body[type] as any))||JSON.stringify(comparableRichText(raw[type]?.rich_text??[]))===JSON.stringify(comparableRichText((op.body[type] as any).rich_text)));}
       if(okay&&(op.kind==='create_page'||op.kind==='create_record')&&op.text){
         const batch=await this.children(raw.id);okay=batch.results.filter((b:any)=>b.type==='paragraph').map((b:any)=>textOf(b.paragraph?.rich_text??[])).join('\n')===op.text;
       }
