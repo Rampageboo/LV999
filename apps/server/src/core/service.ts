@@ -17,6 +17,7 @@ import { decodeCredential, encodeCredential, type OAuthCredential, type OAuthEvi
 import { ContentService } from './content-service.js';
 import { notionRequestSignal } from '../notion/request-budget.js';
 import {MessageBoards} from './boards.js';
+import type {SourceReadAccess} from './source-reader.js';
 
 export class Service {
   readonly started = new Date().toISOString();
@@ -40,6 +41,12 @@ export class Service {
     this.boards=new MessageBoards(store,this.content);
   }
   detectClients() { return this.clients.detect(); }
+  async sourceReader(workspaceId:string):Promise<SourceReadAccess>{
+    if(this.store.list().find(w=>w.id===workspaceId)?.access_role!=='source')throw new DomainError('CONTENT_ACCESS_DENIED','Select an explicit read-only source connection.');
+    const {adapter}=await this.verifiedAdapter(workspaceId);if(!adapter.content)throw new DomainError('INVALID_RESPONSE','Source content reader is unavailable.');
+    const content=adapter.content;
+    return Object.freeze({resource:content.resource.bind(content),children:content.children.bind(content),read:content.read.bind(content)});
+  }
   generateClientConfig(input: unknown) { return this.clients.generate(input); }
   previewClientConfig(input:unknown){return this.clients.previewApply(input);}
   applyClientConfig(input:unknown){return this.clients.apply(input);}

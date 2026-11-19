@@ -13,6 +13,7 @@ export interface Vault {
 export class WindowsVault implements Vault {
   constructor(private script = join(dirname(fileURLToPath(import.meta.url)), 'credential-vault.ps1')) {}
   private target(key: string) {
+    if (key.startsWith('snapshot-key/')) return `com.rampageboo.lv999/snapshot-key/${z.uuid().parse(key.slice(13)).toLowerCase()}`;
     if (key.startsWith('oauth-client/')) return `com.rampageboo.lv999/oauth-client/${z.uuid().parse(key.slice(13)).toLowerCase()}`;
     return `com.rampageboo.lv999/notion/${z.uuid().parse(key).toLowerCase()}`;
   }
