@@ -1,13 +1,14 @@
 # Native client capability matrix — 2026-11-19
 
-Observed locally: Claude Code **2.1.205**, Codex CLI **0.144.1**. Handshake tests use disposable profiles and no model turns. Separate real wake tests use native sign-in without copying credentials, explicit models/efforts and bounded waits. Message-only mode has tools disabled; opt-in Notion mode enables only the bound LV999 MCP. Only app-created sessions are resumed; acceptance did not modify user MCP configuration or existing conversations. See [live content acceptance](qa/2026-11-19-m1-content.md).
+Observed locally: Claude Code **2.1.205**, Codex CLI **0.144.1**. Handshake tests use disposable profiles and no model turns. Earlier real wake tests used native sign-in and owned sessions. Current Owner-selected workflow uses ordinary Notion message boards with automatic bindings disabled. Scoped board-only entries were installed in both user configurations with backups, preserving unrelated settings and existing model conversations. See [board acceptance](qa/2026-11-19-message-boards.md) and earlier [content acceptance](qa/2026-11-19-m1-content.md).
 
 | Capability | Evidence/status |
 |---|---|
 | Claude Code stdio MCP | **Verified**: isolated `claude mcp get lv999` health check; separate SDK initialize/list/local call. 36 tools discovered in the client-bound profile. |
 | Codex stdio MCP | **Verified**: installed `codex app-server --stdio`, `initialize`, `initialized`, `mcpServerStatus/list`; LV999 server info and its tool inventory returned. 36 tools discovered. |
 | LV999 SDK transport for both generated profiles | **Verified**: initialize, tools/list and local list_workspaces call. This is displayed separately from native-client evidence. |
-| User/global configuration detection | **Verified**: known user paths parsed safely; only the owned LV999 entry's state returned. Actual local files currently have no LV999 entry. No success is inferred from file presence. |
+| User/global configuration detection | **Verified**: known user paths parsed safely; only the owned entry status returned. Current saved entries match the verified board-only runtime, with five project grants each. Handshake evidence is separate from file matching. |
+| Ordinary Notion message boards | **Verified**: exactly three board tools in both installed client handshakes; both connection roles appended/read all five real boards, with retry deduplication and zero native model turns. Ordinary page posts never enqueue wake requests. Current saved profiles omit generic content/wake tools. |
 | Project/managed client configuration detection | Not implemented; the UI explicitly reports user-scope paths. |
 | Claude Channels | Documented research preview; no running Channel/session or policy compatibility test performed. Not used. |
 | Claude CLI session create/resume | **Verified in both test Workspaces**: owned session, real scoped Notion tool write/readback and a second turn reusing that session. Native `sonnet`, low effort and strict JSON receipt schema. Message-only uses safe-mode; Notion mode uses strict MCP config and no built-in shell/file tools. `--bare` is not used because it skips native OAuth/keychain sign-in. |

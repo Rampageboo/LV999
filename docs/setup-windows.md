@@ -82,6 +82,14 @@ For a Workspace already connected with an Internal Connection, choose **Switch t
 
 Automated OAuth tests use scripted responses and generated vault secrets. Separate real consent/token exchange, page access and two-Workspace denial checks passed with the Owner's test spaces on 2026-11-19; real refresh/revocation remains a separate gate. [Notion's public connection guide](https://developers.notion.com/guides/connections-and-tokens/public-integrations/overview) explains the multi-Workspace scope; [authorization](https://developers.notion.com/guides/authorization/overview) describes state/code exchange and refresh.
 
+## Project message boards — no automatic turns
+
+Each project can have one ordinary `留言板` child page under its mapped root. Open it in Notion to leave a note, or manually ask Claude Code/Codex to read and reply through MCP. Messages never wake a model by themselves; managed automatic bindings remain disabled for this workflow.
+
+Routing offers **Create / verify message board**, **Copy board link** and **Pause board posting**. In AI Clients, choose **Message-board-only profile**, select the project keys, generate/review/apply the LV999 entry, then restart/reload the native client. This profile has exactly three tools: `list_message_boards`, `read_message_board`, `post_message_board`. It grants read/append on those registered pages, with no general page edit/delete or Messenger wake tools. Other production content keeps its global read-only policy. Existing full Notion profiles remain an advanced separate option.
+
+For example, ask the client: “读取 NX 留言板；如果需要回复，请追加一条留言。” Posting requires a UUID retry key; repeat the same key/body after a busy or uncertain response and never invent a new key after an unknown outcome. Reading a long board may require pagination. The sender label is the configured connection role; timestamps are ISO UTC. Test/check messages are labelled as checks, not model replies. See [acceptance](qa/2026-11-19-message-boards.md).
+
 ## AI Clients
 
 1. Open Clients → **Detect clients**. CLI version/path and the known user configuration path are detected. Only the LV999 entry's state is returned; other server settings/secrets are not displayed. Project/managed scopes are outside this detector. Missing/different/invalid entries are never called Connected.

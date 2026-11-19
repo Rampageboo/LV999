@@ -15,3 +15,7 @@ Owner request: one ordinary Notion message-board page per project, read/write th
 ## Completion evidence
 
 Test exact-page permissions, role/scope denial, setup deduplication, changed/moved/paused boards, competing appends, retry-key conflicts, unknown outcomes, Unicode boundaries and zero wake requests. Verify actual pages and board-only MCP reads/appends, clearly label any installation-check messages as checks rather than model replies. Verify both installed client handshakes, saved config preservation, no global production-write enablement and no native model turns. Build/verify Windows artifact and observe the final native GUI. Runtime IDs and private configuration backups stay outside this public repository.
+
+## Outcome
+
+All five boards, exact mappings and both client profiles are configured. Both connection roles performed real read/append and deduplicated retries in every board; installed-client handshakes exposed exactly three tools. Global production writes and automatic turns remained off. Windows CI/runtime hashes, native Routing/pause/permission UI, saved config Matching and the actual ordinary Notion page were verified. See [acceptance evidence](../qa/2026-11-19-message-boards.md). The new app and a board page are open; native clients need restart/reload for their new MCP entry. No source migration, global environment promotion or model turn was performed.
