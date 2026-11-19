@@ -37,7 +37,7 @@ impl Backend {
         writeln!(self.input, "{request}").and_then(|_| self.input.flush())
             .map_err(|_| "Backend stopped. Restart LV999 to reconnect.".to_string())?;
         // Identity + read probe + vault round-trip + compensation each have bounded waits.
-        let timeout = if matches!(method, "execute_mutation" | "prepare_mutation" | "content_read") { 180 }
+        let timeout = if matches!(method, "execute_mutation" | "prepare_mutation" | "content_read" | "setup_message_board") { 180 }
             else if matches!(method, "connect_workspace" | "reauthorize_workspace" | "test_client" | "refresh_oauth" | "shutdown_agents") { 120 } else { 60 };
         let line = self.output.recv_timeout(Duration::from_secs(timeout))
             .map_err(|_| "Backend response timed out. The operation result is unknown; restart LV999 and refresh before retrying.".to_string())?;
@@ -142,7 +142,7 @@ fn open_notion_authorization(url: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn content_request(method: String, input: serde_json::Value, state: tauri::State<'_, SharedBackend>) -> Result<serde_json::Value, String> {
-    if !matches!(method.as_str(), "content_read" | "set_workspace_writes" | "prepare_mutation" | "approve_mutation" | "execute_mutation" | "mutation_status" | "pending_mutations") {
+    if !matches!(method.as_str(), "content_read" | "set_workspace_writes" | "prepare_mutation" | "approve_mutation" | "execute_mutation" | "mutation_status" | "pending_mutations" | "list_message_boards" | "setup_message_board" | "set_board_posting") {
         return Err("Unsupported content operation.".into());
     }
     let backend = state.inner().clone();

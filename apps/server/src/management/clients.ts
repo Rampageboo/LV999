@@ -36,19 +36,19 @@ export class ClientManager {
       detail: 'Detect configuration, then test the transport and installed client separately.', detected_at: null, handshake: null }));
   }
   snapshot() { return this.states.map(state => ({ ...state })); }
-  private entry(client: ClientKind, workspaces: string[], writes:string[]=[],reads:string[]=[]): Entry {
+  private entry(client: ClientKind, workspaces: string[], writes:string[]=[],reads:string[]=[],boards:string[]=[],boardsOnly=false): Entry {
     return { type: 'stdio', command: this.paths.executable, args: [this.paths.entry, 'mcp', '--data-dir', this.paths.data,
-      '--client', client,'--read-scoped', ...workspaces.flatMap(id => ['--chat-workspace', id]),...reads.flatMap(id=>['--read-workspace',id]),...writes.flatMap(id=>['--write-workspace',id])] };
+      '--client', client,'--read-scoped',...(boardsOnly?['--boards-only']:[]),...boards.flatMap(key=>['--board-project',key]), ...(boardsOnly?[]:workspaces.flatMap(id => ['--chat-workspace', id])),...(boardsOnly?[]:reads.flatMap(id=>['--read-workspace',id])),...(boardsOnly?[]:writes.flatMap(id=>['--write-workspace',id]))] };
   }
   generate(input: unknown): Result<GeneratedConfig> {
     const parsed = ClientConfigInput.safeParse(input);
     if (!parsed.success) return result<GeneratedConfig>(null, null, 'INVALID_INPUT', ['Select a client and valid Workspace chat permissions.']);
-    const { client, chat_workspace_ids,write_workspace_ids,read_workspace_ids } = parsed.data;
-    const entry = this.entry(client, [...new Set(chat_workspace_ids)],[...new Set(write_workspace_ids)],[...new Set(read_workspace_ids)]);
+    const { client, chat_workspace_ids,write_workspace_ids,read_workspace_ids,board_project_keys,boards_only } = parsed.data;
+    const entry = this.entry(client, [...new Set(chat_workspace_ids)],[...new Set(write_workspace_ids)],[...new Set(read_workspace_ids)],[...new Set(board_project_keys)],boards_only);
     const text = client === 'claude' ? JSON.stringify({ mcpServers: { [SERVER_NAME]: entry } }, null, 2) :
       `[mcp_servers.${SERVER_NAME}]\ncommand = ${JSON.stringify(entry.command)}\nargs = ${JSON.stringify(entry.args)}\nstartup_timeout_sec = 30\ntool_timeout_sec = 60\n`;
     return result({ client, format: client === 'claude' ? 'JSON' : 'TOML', config_path: this.states.find(s => s.id === client)!.config_path,
-      server_name: SERVER_NAME, text, chat_workspace_ids,write_workspace_ids,read_workspace_ids });
+      server_name: SERVER_NAME, text, chat_workspace_ids,write_workspace_ids,read_workspace_ids,board_project_keys,boards_only });
   }
   private async configBytes(path:string){
     try{const info=await lstat(path);if(!info.isFile()||info.isSymbolicLink()||info.size>2_000_000)throw new Error('UNSAFE_CONFIG');return await readFile(path);}
@@ -156,21 +156,22 @@ export class ClientManager {
     }
     return result(this.snapshot());
   }
-  private async sdk(clientId: ClientKind, workspaces: string[],writes:string[]=[],reads:string[]=[]) {
-    const entry = this.entry(clientId, workspaces,writes,reads);
+  private async sdk(clientId: ClientKind, workspaces: string[],writes:string[]=[],reads:string[]=[],boards:string[]=[],boardsOnly=false) {
+    const entry = this.entry(clientId, workspaces,writes,reads,boards,boardsOnly);
     const client = new Client({ name: 'lv999-handshake-test', version: '0.1.0' });
     try {
       const transport = new StdioClientTransport({ command: entry.command!, args: entry.args, stderr: 'pipe', env: this.paths.transportEnv });
       transport.stderr?.on('data', () => {});
       await client.connect(transport, { timeout: 15000 });
       const listing = await client.listTools({}, { timeout: 10000 });
-      if (!listing.tools.some(tool => tool.name === 'list_workspaces') || !listing.tools.some(tool => tool.name === 'resolve_project')) throw new Error('WRONG_SERVER');
-      const response = await client.callTool({ name: 'list_workspaces', arguments: {} }, { timeout: 10000 });
+      const required=boardsOnly?['list_message_boards','read_message_board','post_message_board']:['list_workspaces','resolve_project'];
+      if(required.some(name=>!listing.tools.some(tool=>tool.name===name)))throw new Error('WRONG_SERVER');
+      const response = await client.callTool({ name: boardsOnly?'list_message_boards':'list_workspaces', arguments: {} }, { timeout: 10000 });
       if (!JSON.parse((response.content as { text: string }[])[0].text).ok) throw new Error('CALL_FAILED');
       return listing.tools.length;
     } finally { await client.close(); }
   }
-  private async codexNative(executable: string, profile: string): Promise<number> {
+  private async codexNative(executable: string, profile: string,boardsOnly=false): Promise<number> {
     const child = this.launch(executable, ['app-server', '--stdio'], childEnvironment({ CODEX_HOME: profile }), profile);
     const pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
     let seq = 0;
@@ -192,7 +193,7 @@ export class ClientManager {
       child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
       const listing = await call('mcpServerStatus/list', { detail: 'toolsAndAuthOnly', limit: 100 });
       const server = listing.data?.find((value: any) => value.name === SERVER_NAME);
-      if (!server?.serverInfo || !Object.keys(server.tools ?? {}).some(name => name.includes('list_workspaces'))) throw new Error('NATIVE_HANDSHAKE_NOT_CONFIRMED');
+      if (!server?.serverInfo || !Object.keys(server.tools ?? {}).some(name => name.includes(boardsOnly?'list_message_boards':'list_workspaces'))) throw new Error('NATIVE_HANDSHAKE_NOT_CONFIRMED');
       return Object.keys(server.tools).length;
     } finally {
       lines.close();
@@ -205,26 +206,26 @@ export class ClientManager {
   async test(input: unknown): Promise<Result<ClientView>> {
     const parsed = ClientTestInput.safeParse(input);
     if (!parsed.success) return result<ClientView>(null, null, 'INVALID_INPUT', ['Select a client and handshake type.']);
-    const { client, kind, chat_workspace_ids,write_workspace_ids,read_workspace_ids } = parsed.data;
+    const { client, kind, chat_workspace_ids,write_workspace_ids,read_workspace_ids,board_project_keys,boards_only } = parsed.data;
     const state = this.states.find(value => value.id === client)!;
     let profileRoot: string | null = null;
     try {
       let count: number;
-      if (kind === 'sdk') count = await this.sdk(client, chat_workspace_ids,write_workspace_ids,read_workspace_ids);
+      if (kind === 'sdk') count = await this.sdk(client, chat_workspace_ids,write_workspace_ids,read_workspace_ids,board_project_keys,boards_only);
       else {
         const executable = await this.locate(client);
         if (!executable) throw new Error('CLIENT_NOT_INSTALLED');
         profileRoot = await mkdtemp(join(tmpdir(), 'lv999-client-probe-'));
         const profile = join(profileRoot, 'profile'); await mkdir(profile);
-        const generated = this.generate({ client, chat_workspace_ids,write_workspace_ids,read_workspace_ids }).data!;
-        if (client === 'codex') { await writeFile(join(profile, 'config.toml'), generated.text); count = await this.codexNative(executable, profile); }
+        const generated = this.generate({ client, chat_workspace_ids,write_workspace_ids,read_workspace_ids,board_project_keys,boards_only }).data!;
+        if (client === 'codex') { await writeFile(join(profile, 'config.toml'), generated.text); count = await this.codexNative(executable, profile,boards_only); }
         else {
           await writeFile(join(profile, '.claude.json'), generated.text);
           await writeFile(join(profileRoot, '.claude.json'), generated.text);
           const probe = await this.run(executable, ['mcp', 'get', SERVER_NAME], childEnvironment({ CLAUDE_CONFIG_DIR: profile,
             DISABLE_TELEMETRY: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' }), 40000, profileRoot);
           if (!claudeHealthPassed(probe.code, probe.text)) throw new Error('NATIVE_HANDSHAKE_NOT_CONFIRMED');
-          count = await this.sdk(client, chat_workspace_ids,write_workspace_ids,read_workspace_ids);
+          count = await this.sdk(client, chat_workspace_ids,write_workspace_ids,read_workspace_ids,board_project_keys,boards_only);
         }
       }
       state.handshake = { kind, ok: true, checked_at: new Date().toISOString(), tool_count: count,

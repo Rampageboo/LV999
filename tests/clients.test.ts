@@ -25,6 +25,10 @@ it('generates parseable credential-free configurations with startup-bound roles 
   const scoped=JSON.parse(f.manager.generate({client:'claude',write_workspace_ids:[id]}).data!.text);
   expect(scoped.mcpServers.lv999.args).toContain('--write-workspace');expect(codex.write_workspace_ids).toEqual([]);
 });
+it('generates a board-only profile with project grants and no broad content/chat scopes',()=>{
+ const f=fixture(),id=randomUUID(),profile=f.manager.generate({client:'claude',boards_only:true,board_project_keys:['P'],read_workspace_ids:[id],write_workspace_ids:[id],chat_workspace_ids:[id]}).data!,entry=JSON.parse(profile.text).mcpServers.lv999;
+ expect(entry.args).toContain('--boards-only');expect(entry.args).toContain('--board-project');expect(entry.args).toContain('P');expect(entry.args).not.toContain('--write-workspace');expect(entry.args).not.toContain('--read-workspace');expect(entry.args).not.toContain('--chat-workspace');expect(profile.text).not.toContain(id);
+});
 it('detection returns only owned-entry status and preserves unrelated private configuration', async () => {
   const f = fixture(), privateValue = randomUUID();
   const source = JSON.stringify({ mcpServers: { other: { env: { PRIVATE_VALUE: privateValue } }, lv999: JSON.parse(f.manager.generate({ client: 'claude' }).data!.text).mcpServers.lv999 }, unrelated: privateValue });

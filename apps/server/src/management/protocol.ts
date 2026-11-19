@@ -8,7 +8,7 @@ const Request = z.object({
   method: z.enum(['snapshot', 'verify_workspace', 'connect_workspace', 'reauthorize_workspace', 'browse_pages', 'inspect_page', 'save_project', 'resolve_project',
     'detect_clients', 'generate_client_config','preview_client_config','apply_client_config', 'test_client', 'chat_overview', 'read_chat', 'send_chat', 'configure_agent','stop_agent','resume_agent','retry_wake','shutdown_agents',
     'oauth_status', 'configure_oauth', 'start_oauth', 'cancel_oauth', 'refresh_oauth',
-    'content_read','set_workspace_writes','prepare_mutation','approve_mutation','execute_mutation','mutation_status','pending_mutations']),
+    'content_read','set_workspace_writes','prepare_mutation','approve_mutation','execute_mutation','mutation_status','pending_mutations','list_message_boards','setup_message_board','set_board_posting']),
   params: z.unknown().optional(),
 }).strict();
 
@@ -55,6 +55,9 @@ export async function runManagement(service: Service) {
         case 'execute_mutation':value=await service.content.execute(request.params);break;
         case 'mutation_status':value=service.content.status(z.object({idempotency_key:z.uuid()}).parse(request.params).idempotency_key);break;
         case 'pending_mutations':value=service.content.pending();break;
+        case 'list_message_boards':value=service.boards.list('owner');break;
+        case 'setup_message_board':value=await service.boards.setup(request.params);break;
+        case 'set_board_posting':value=service.boards.setPosting(request.params);break;
       }
       process.stdout.write(JSON.stringify({ id, result: value }) + '\n');
     } catch {

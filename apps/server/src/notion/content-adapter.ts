@@ -10,7 +10,11 @@ export interface ContentAdapter {
   apply(op:MutationOp,known:(result:MutationResult)=>void,resource?:any):Promise<MutationResult>;
   verify(op:MutationOp,result:MutationResult):Promise<MutationResult>;
 }
-export const richText=(text:string)=>Array.from({length:Math.ceil(text.length/2000)},(_,i)=>({type:'text' as const,text:{content:text.slice(i*2000,(i+1)*2000)}}));
+export const richText=(text:string)=>{
+  const parts:{type:'text';text:{content:string}}[]=[];
+  for(let start=0;start<text.length;){let end=Math.min(start+2000,text.length);if(end<text.length&&/[\uD800-\uDBFF]/.test(text[end-1])&&/[\uDC00-\uDFFF]/.test(text[end]))end--;parts.push({type:'text',text:{content:text.slice(start,end)}});start=end;}
+  return parts;
+};
 const paragraphs=(text:string)=>text?text.split('\n').map(line=>({object:'block' as const,type:'paragraph' as const,paragraph:{rich_text:richText(line)}})):[];
 const textOf=(parts:any[])=>parts.map(part=>part.plain_text??part.text?.content??'').join('');
 function comparable(value:any):unknown {

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
-import { WorkspaceInput, WorkspaceRef, ChatActor, result, type ChatIdentity } from '../../../../packages/contracts/src/index.js';
+import { WorkspaceInput, WorkspaceRef, ChatActor,ProjectKey, result, type ChatIdentity } from '../../../../packages/contracts/src/index.js';
 import { Service } from '../core/service.js';
 import { Store } from '../infra/store.js';
 import { WindowsVault } from '../infra/vault.js';
@@ -31,7 +31,9 @@ if (mode === 'management') {
   const readIds=args.flatMap((arg,index)=>arg==='--read-workspace'?[args[index+1]?.toLowerCase()]:[]).filter(Boolean) as string[];
   if(readIds.some(id=>!WorkspaceRef.safeParse({workspace_id:id}).success))throw new Error('INVALID_READ_SCOPE');
   if(args.includes('--notion-only')&&(readIds.length!==1||writeIds.length!==1||readIds[0]!==writeIds[0]||!identity))throw new Error('INVALID_BOUND_SCOPE');
-  const server = createMcpServer(service, identity,writeIds,projectKeys.length?projectKeys:undefined,args.includes('--read-scoped')||readIds.length?readIds:undefined,args.includes('--notion-only'));
+  const boardProjects=args.flatMap((arg,index)=>arg==='--board-project'?[args[index+1]?.toUpperCase()]:[]).filter(Boolean) as string[];
+  if(boardProjects.some(key=>!ProjectKey.safeParse(key).success))throw new Error('INVALID_BOARD_SCOPE');
+  const server = createMcpServer(service, identity,writeIds,projectKeys.length?projectKeys:undefined,args.includes('--read-scoped')||readIds.length?readIds:undefined,args.includes('--notion-only'),boardProjects,args.includes('--boards-only'));
   await server.connect(new StdioServerTransport());
   process.stdin.once('end', () => { void server.close().finally(() => store.close()); });
 } else if (mode === 'cli') {

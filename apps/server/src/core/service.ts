@@ -16,6 +16,7 @@ import { NotionOAuth } from '../management/notion-oauth.js';
 import { decodeCredential, encodeCredential, type OAuthCredential, type OAuthEvidence, type OAuthExchange } from '../notion/oauth-credential.js';
 import { ContentService } from './content-service.js';
 import { notionRequestSignal } from '../notion/request-budget.js';
+import {MessageBoards} from './boards.js';
 
 export class Service {
   readonly started = new Date().toISOString();
@@ -25,6 +26,7 @@ export class Service {
   readonly wake:WakeEngine;
   readonly oauth: NotionOAuth;
   readonly content: ContentService;
+  readonly boards:MessageBoards;
   private makeAdapter:(token:string,oauth?:OAuthEvidence)=>NotionAdapter;
   constructor(readonly store: Store, private vault: Vault,
     makeAdapter?: (token: string, oauth?: OAuthEvidence) => NotionAdapter,
@@ -35,6 +37,7 @@ export class Service {
     this.wake=new WakeEngine(this.messages,local?.bridge,{executable:this.clients.paths.executable,entry:this.clients.paths.entry});
     this.oauth = new NotionOAuth(store, vault, (credential, input) => this.connectOAuth(credential, input), local?.oauth, local?.oauthPort, local?.oauthTtlMs);
     this.content = new ContentService(store,id=>this.verifiedAdapter(id));
+    this.boards=new MessageBoards(store,this.content);
   }
   detectClients() { return this.clients.detect(); }
   generateClientConfig(input: unknown) { return this.clients.generate(input); }

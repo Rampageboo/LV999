@@ -32,7 +32,8 @@ export const ContentReadInput=z.object({workspace_id:Id,kind:z.enum(['page_tree'
 export type Mutation=z.infer<typeof MutationRequest>;
 export type MutationOp=z.infer<typeof ContentOperation>;
 export type ContentRead=z.infer<typeof ContentReadInput>;
-export type ContentCaller={actor:'human'|'claude'|'codex'|'mcp';write_workspace_ids:string[]|'owner';project_keys?:string[]};
+export type ContentCaller={actor:'human'|'claude'|'codex'|'mcp';write_workspace_ids:string[]|'owner';project_keys?:string[];
+  limited_board?:{append_page_id?:string;create_parent_id?:string;validate:()=>void}};
 export type MutationResult={id:string;url:string|null;last_edited_time:string|null;kind:MutationOp['kind'];readback_verified:boolean;details:Record<string,unknown>};
 export type MutationPlan={id:string;hash:string;workspace_id:string;project_key:string|null;operation:MutationOp['kind'];resource_id:string;
   title:string;version:string|null;destructive:boolean;expires_at:string;summary:string};

@@ -1,6 +1,8 @@
 import {randomUUID} from 'node:crypto';
 import {expect,it} from 'vitest';
 import {OfficialNotionAdapter} from '../apps/server/src/notion/adapter.js';
+import {richText} from '../apps/server/src/notion/content-adapter.js';
+it('keeps Unicode characters intact at rich-text chunk boundaries',()=>{const text='x'.repeat(1999)+'😀'+'尾'.repeat(2100),parts=richText(text);expect(parts.map(p=>p.text.content).join('')).toBe(text);expect(parts.every(p=>p.text.content.length<=2000&&!/[\uD800-\uDBFF]$/.test(p.text.content)&&! /^[\uDC00-\uDFFF]/.test(p.text.content))).toBe(true);});
 
 it('sends recoverable deletion through the pinned SDK and checks the returned target',async()=>{
   const page=randomUUID(),calls:Request[]=[];

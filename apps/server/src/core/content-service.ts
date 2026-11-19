@@ -40,10 +40,14 @@ export class ContentService {
     const route=matches[0];if(route.revision!==input.route_revision)throw new DomainError('ROUTE_CONFLICT','The project route changed. Resolve it again before writing.');
     return{workspaceId:route.workspace_id,projectKey:route.project_key,routeRevision:route.revision,rootId:route.root_page.id};
   }
-  private permission(target:Target,caller:ContentCaller){
+  private permission(target:Target,caller:ContentCaller,operation:MutationOp){
     if(caller.project_keys&&(!target.projectKey||!caller.project_keys.includes(target.projectKey)))throw new DomainError('WRITE_ACCESS_DENIED','This session can write only through its bound project route.');
     if(caller.write_workspace_ids!=='owner'&&!caller.write_workspace_ids.includes(target.workspaceId))throw new DomainError('WRITE_ACCESS_DENIED','This client was not granted write access to that Workspace. Regenerate its scoped configuration.');
-    if(!this.enabled(target.workspaceId))throw new DomainError('WRITE_DISABLED','Enable writes for this exact Workspace in LV999 first. Production targets require explicit confirmation.');
+    if(caller.limited_board){
+      caller.limited_board.validate();
+      const limited=operation.kind==='append_blocks'&&operation.page_id===caller.limited_board.append_page_id||operation.kind==='create_page'&&operation.parent_page_id===caller.limited_board.create_parent_id;
+      if(!limited)throw new DomainError('WRITE_ACCESS_DENIED','This capability permits only the exact message board operation.');
+    }else if(!this.enabled(target.workspaceId))throw new DomainError('WRITE_DISABLED','Enable writes for this exact Workspace in LV999 first. Production targets require explicit confirmation.');
   }
   private routeCurrent(target:Target){if(target.projectKey&&this.store.projects().find(p=>p.project_key===target.projectKey)?.revision!==target.routeRevision)throw new DomainError('ROUTE_CONFLICT','The project route changed during validation; nothing was written.');}
   private async pageScope(adapter:ContentAdapter,page:any,root:string|null){
@@ -61,7 +65,7 @@ export class ContentService {
     }
     throw new DomainError('WRITE_ACCESS_DENIED','This resource is outside the selected project root.');
   }
-  private async resourceFor(op:MutationOp,adapter:ContentAdapter,target:Target){
+  private async resourceFor(op:MutationOp,adapter:ContentAdapter,target:Target,boardAppend=false){
     let resource:any;
     if('data_source_id'in op){
       resource=await adapter.resource('data_source',op.data_source_id);
@@ -83,7 +87,8 @@ export class ContentService {
       }
     }
     if(resource.in_trash&&op.kind!=='restore_page')throw new DomainError('CONTENT_CONFLICT','The target is in trash. Restore it explicitly before editing.');
-    if('expected_last_edited_time'in op&&resource.last_edited_time!==op.expected_last_edited_time)throw new DomainError('CONTENT_CONFLICT','The resource changed since it was loaded. Reload and review your edit.');
+    // A registered board can only append new blocks; concurrent edits cannot be overwritten by this operation.
+    if(!boardAppend&&'expected_last_edited_time'in op&&resource.last_edited_time!==op.expected_last_edited_time)throw new DomainError('CONTENT_CONFLICT','The resource changed since it was loaded. Reload and review your edit.');
     return resource;
   }
   private async references(value:any,adapter:ContentAdapter,workspaceId:string,depth=0):Promise<void>{
@@ -112,10 +117,10 @@ export class ContentService {
     catch(error){return this.fail(error instanceof z.ZodError?new DomainError('INVALID_INPUT','Invalid content mutation.'):error);}
   }
   private async preflight(request:Mutation,caller:ContentCaller):Promise<Prepared>{
-    const target=this.target(request.target);this.permission(target,caller);this.validate(request.operation);
+    const target=this.target(request.target);this.permission(target,caller,request.operation);this.validate(request.operation);
     const {adapter:base}=await this.access(target.workspaceId),adapter=base.content;
     if(!adapter)throw new DomainError('UNSUPPORTED','This adapter does not support content operations.');
-    const resource=await this.resourceFor(request.operation,adapter,target);
+    const resource=await this.resourceFor(request.operation,adapter,target,request.operation.kind==='append_blocks'&&caller.limited_board?.append_page_id===request.operation.page_id);
     await this.references('properties'in request.operation?request.operation.properties:'blocks'in request.operation?request.operation.blocks:'body'in request.operation?request.operation.body:null,adapter,target.workspaceId);
     if(request.operation.kind==='update_block'&&!request.operation.body[resource.type])throw new DomainError('INVALID_INPUT','A block edit cannot change its type.');
     this.routeCurrent(target);
@@ -187,8 +192,8 @@ export class ContentService {
       }
       const target=prepared.target;
       heartbeat=setInterval(()=>{try{this.store.db.prepare('UPDATE content_write_locks SET expires=? WHERE workspace_id=? AND owner=?').run(Date.now()+30000,target.workspaceId,ownerId);}catch{}},5000);heartbeat.unref();
-      this.permission(target,caller);this.routeCurrent(target);
-      const current=await this.resourceFor(request.operation,prepared.adapter,target);checkNotionBudget();
+      this.permission(target,caller,request.operation);this.routeCurrent(target);
+      const current=await this.resourceFor(request.operation,prepared.adapter,target,request.operation.kind==='append_blocks'&&caller.limited_board?.append_page_id===request.operation.page_id);checkNotionBudget();
       const value=await prepared.adapter.apply(request.operation,value=>{
         known=value;this.store.db.prepare("UPDATE content_operations SET state='UNVERIFIED',result=?,updated_at=? WHERE actor=? AND retry_key=?").run(JSON.stringify(value),new Date().toISOString(),caller.actor,request!.idempotency_key);
         if(value.details.file_upload_id)this.store.db.prepare('INSERT OR IGNORE INTO content_uploads(upload_id,workspace_id,filename) VALUES(?,?,?)').run(String(value.details.file_upload_id),target.workspaceId,String(value.details.filename));
