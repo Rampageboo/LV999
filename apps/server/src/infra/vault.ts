@@ -57,6 +57,7 @@ export class WindowsVault implements Vault {
       if (!response.ok) throw new Error('REMOVE_FAILED');
     } catch { throw new DomainError('VAULT_UNAVAILABLE', 'The credential could not be restored in Windows Credential Manager.'); }
   }
-  // First PowerShell/CLR startup on a clean Windows runner can exceed a credential operation's budget.
-  async probe() { try { return (await this.invoke({ operation: 'probe' }, 30000)).ok; } catch { return false; } }
+  // Cold Windows runner evidence: CredRead probe succeeded directly, but isolated CLR startup hit 30 s.
+  // This startup-only budget stays below native IPC's 60 s deadline; actual credential operations keep 10 s.
+  async probe() { try { return (await this.invoke({ operation: 'probe' }, 45000)).ok; } catch { return false; } }
 }
