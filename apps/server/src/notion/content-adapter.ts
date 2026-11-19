@@ -26,6 +26,9 @@ function writableBlock(block:any):any{
   if(Array.isArray(body.children))body.children=body.children.map(writableBlock);
   return{...block,[block.type]:body};
 }
+function readableBlock(block:any):any{
+  return block?.type==='numbered_list_item'&&block.numbered_list_item&&!('list_format'in block.numbered_list_item)?{...block,numbered_list_item:{...block.numbered_list_item,list_format:'numbers'}}:block;
+}
 const textOf=(parts:any[])=>parts.map(part=>part.plain_text??part.text?.content??'').join('');
 const comparableDate=(value:unknown)=>typeof value==='string'&&/T.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():value;
 function comparableRichText(parts:any[]){
@@ -73,9 +76,9 @@ export class OfficialContentAdapter implements ContentAdapter {
       case'view':value=await this.client.views.retrieve({view_id:id});break;
       case'upload':value=await this.client.fileUploads.retrieve({file_upload_id:id});break;
     }
-    if(value?.id?.toLowerCase()!==id.toLowerCase())throw new DomainError('INVALID_RESPONSE','Notion returned a different resource ID.');return value;
+    if(value?.id?.toLowerCase()!==id.toLowerCase())throw new DomainError('INVALID_RESPONSE','Notion returned a different resource ID.');return kind==='block'?readableBlock(value):value;
   }
-  children(id:string,cursor?:string){return this.client.blocks.children.list({block_id:id,page_size:100,start_cursor:cursor});}
+  async children(id:string,cursor?:string){const batch=await this.client.blocks.children.list({block_id:id,page_size:100,start_cursor:cursor});return{...batch,results:batch.results.map(readableBlock)};}
   comments(id:string,cursor?:string){return this.client.comments.list({block_id:id,page_size:100,start_cursor:cursor});}
   property(pageId:string,propertyId:string,cursor?:string){return this.client.pages.properties.retrieve({page_id:pageId,property_id:propertyId,page_size:100,start_cursor:cursor});}
   async read(input:ContentRead){

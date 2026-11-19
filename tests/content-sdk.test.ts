@@ -2,6 +2,10 @@ import {randomUUID} from 'node:crypto';
 import {expect,it} from 'vitest';
 import {OfficialNotionAdapter} from '../apps/server/src/notion/adapter.js';
 import {richText} from '../apps/server/src/notion/content-adapter.js';
+it('normalizes omitted ordinary list format without overriding a custom format',async()=>{
+ const block=randomUUID(),custom=randomUUID(),adapter=new OfficialNotionAdapter(randomUUID(),async(input,init)=>{const request=new Request(input,init),ordinary={id:block,type:'numbered_list_item',numbered_list_item:{rich_text:[]}};return Response.json(request.url.includes('/children')?{results:[ordinary,{id:custom,type:'numbered_list_item',numbered_list_item:{rich_text:[],list_format:'roman'}}],has_more:false,next_cursor:null}:ordinary);});
+ expect((await adapter.content.resource('block',block)).numbered_list_item.list_format).toBe('numbers');expect((await adapter.content.children(randomUUID())).results.map((b:any)=>b.numbered_list_item.list_format)).toEqual(['numbers','roman']);
+});
 it('verifies mention identity instead of its server-resolved display text',async()=>{
  const page=randomUUID(),block=randomUUID(),mentioned=randomUUID();let wrong=false;
  const adapter=new OfficialNotionAdapter(randomUUID(),async(input,init)=>{const request=new Request(input,init);if(request.method==='PATCH')return Response.json({results:[{id:block}]});return Response.json(request.url.endsWith(block)?{id:block,type:'paragraph',in_trash:false,paragraph:{rich_text:[{type:'mention',mention:{type:'page',page:{id:wrong?randomUUID():mentioned}},plain_text:'Resolved title'}]}}:{id:page});});
