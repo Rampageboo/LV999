@@ -330,7 +330,8 @@ export class Service {
     }
   }
   snapshot(): Snapshot {
-    const workspaces = this.store.list().map(workspace=>({...workspace,write_enabled:this.content.enabled(workspace.id)}));
+    const boardRows=this.boards.list('owner').data??[];
+    const workspaces = this.store.list().map(workspace=>({...workspace,write_enabled:this.content.enabled(workspace.id),board_append_projects:boardRows.filter(b=>b.workspace_id===workspace.id&&b.enabled&&b.route_current).map(b=>b.project_key)}));
     return {
       app_version: APP_VERSION, app_id: APP_ID, captured_at: new Date().toISOString(),
       backend: { status: 'Running', pid: process.pid, node: process.version, executable: process.execPath,
@@ -344,7 +345,7 @@ export class Service {
       ],
       workspaces, activity: this.store.activity(), projects: this.store.projects(),
       clients: this.clients.snapshot(),
-      jobs: [], settings: { read_only: !workspaces.some(w=>w.write_enabled), remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
+      jobs: [], settings: { read_only: !workspaces.some(w=>w.write_enabled||w.board_append_projects.length), remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
         data_dir: this.store.directory, updater_configured: false },
       capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: true, group_chat: true, auto_wake: true, migration: false, content_write: true },
     };

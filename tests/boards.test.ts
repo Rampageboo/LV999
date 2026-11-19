@@ -32,7 +32,7 @@ function fixture(){
  return{store,service,workspace,root,pages,blocks,apply,vault,bridge,setup,post,setUnknown:()=>{unknown=true;},hold:(p:Promise<void>|null)=>{hold=p;}};
 }
 it('creates one ordinary board under the exact root without enabling global production writes',async()=>{
- const f=fixture(),a=await f.setup(),b=await f.setup();expect(a.ok).toBe(true);expect(b.data!.page_id).toBe(a.data!.page_id);expect(f.apply).toHaveBeenCalledTimes(1);expect(f.service.content.enabled(f.workspace)).toBe(false);expect(f.pages.get(a.data!.page_id).parent.page_id).toBe(f.root);
+ const f=fixture(),a=await f.setup(),b=await f.setup();expect(a.ok).toBe(true);expect(b.data!.page_id).toBe(a.data!.page_id);expect(f.apply).toHaveBeenCalledTimes(1);expect(f.service.content.enabled(f.workspace)).toBe(false);expect(f.pages.get(a.data!.page_id).parent.page_id).toBe(f.root);expect(f.service.snapshot().workspaces[0].board_append_projects).toEqual(['P']);expect(f.service.snapshot().settings.read_only).toBe(false);
 });
 it('allows only plain-text board append and deduplicates identical retry keys',async()=>{
  const f=fixture(),board=(await f.setup()).data!,key=randomUUID();

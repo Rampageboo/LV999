@@ -111,6 +111,7 @@ export function result<T>(data: T | null, workspace_id: string | null = null,
 }
 export type WorkspaceView = WorkspaceConfig & {
   write_enabled?: boolean;
+  board_append_projects?:string[];
   auth_kind?: 'internal' | 'oauth';
   status: 'Configured' | 'Connected' | 'Auth required' | 'Degraded';
   verified_name: string | null; bot_id: string | null; checked_at: string | null;
