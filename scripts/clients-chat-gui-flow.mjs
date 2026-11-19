@@ -31,7 +31,7 @@ export async function runClientsChatFlow({ getPage, getBrowser, state, seed, bas
   await page.getByRole('navigation').getByRole('button', { name: 'Clients', exact: true }).click();
   const claude = page.getByRole('region', { name: 'Claude Code integration', exact: true });
   await claude.getByText('Not installed', { exact: true }).waitFor();
-  await claude.getByRole('checkbox', { name: 'Alpha alias', exact: true }).check();
+  await claude.getByRole('group',{name:'Chat access in the generated configuration (opt-in)',exact:true}).getByRole('checkbox', { name: 'Alpha alias', exact: true }).check();
   await claude.getByRole('button', { name: 'Generate configuration', exact: true }).click();
   const text = await page.getByRole('textbox', { name: 'Generated configuration', exact: true }).inputValue();
   const config = JSON.parse(text); assert.ok(config.mcpServers.lv999.args.includes('claude')); assert.ok(config.mcpServers.lv999.args.includes(a));

@@ -6,9 +6,9 @@ import {projectNameLookup} from '../infra/store.js';
 import { ContentTarget,ContentOperation,MutationRequest,ExecuteMutationInput,ContentReadInput,type ContentCaller } from '../../../../packages/contracts/src/content.js';
 
 export function createMcpServer(service: Service, identity?: ChatIdentity, writes:string[]=[], projectKeys?:string[], reads?:string[], notionOnly=false) {
-  const allowed=(id:string)=>reads===undefined||reads.includes(id);
+  const allowed=(id:string)=>reads===undefined?service.store.list().some(w=>w.id===id&&w.environment==='test'):reads.includes(id);
   const denied=()=>result(null,null,'CONTENT_ACCESS_DENIED',['This native session is restricted to its bound Workspace.']);
-  const caller:ContentCaller={actor:identity?.actor??'mcp',write_workspace_ids:writes,project_keys:projectKeys};
+  const caller:ContentCaller={actor:identity?.actor??'mcp',write_workspace_ids:writes.filter(allowed),project_keys:projectKeys};
   const server = new McpServer({ name: 'lv999-notion', version: APP_VERSION });
   const reply = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }],
     isError: typeof value === 'object' && value !== null && 'ok' in value && value.ok === false });

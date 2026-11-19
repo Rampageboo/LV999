@@ -31,7 +31,7 @@ if (mode === 'management') {
   const readIds=args.flatMap((arg,index)=>arg==='--read-workspace'?[args[index+1]?.toLowerCase()]:[]).filter(Boolean) as string[];
   if(readIds.some(id=>!WorkspaceRef.safeParse({workspace_id:id}).success))throw new Error('INVALID_READ_SCOPE');
   if(args.includes('--notion-only')&&(readIds.length!==1||writeIds.length!==1||readIds[0]!==writeIds[0]||!identity))throw new Error('INVALID_BOUND_SCOPE');
-  const server = createMcpServer(service, identity,writeIds,projectKeys.length?projectKeys:undefined,readIds.length?readIds:undefined,args.includes('--notion-only'));
+  const server = createMcpServer(service, identity,writeIds,projectKeys.length?projectKeys:undefined,args.includes('--read-scoped')||readIds.length?readIds:undefined,args.includes('--notion-only'));
   await server.connect(new StdioServerTransport());
   process.stdin.once('end', () => { void server.close().finally(() => store.close()); });
 } else if (mode === 'cli') {

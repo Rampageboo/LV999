@@ -36,19 +36,19 @@ export class ClientManager {
       detail: 'Detect configuration, then test the transport and installed client separately.', detected_at: null, handshake: null }));
   }
   snapshot() { return this.states.map(state => ({ ...state })); }
-  private entry(client: ClientKind, workspaces: string[], writes:string[]=[]): Entry {
+  private entry(client: ClientKind, workspaces: string[], writes:string[]=[],reads:string[]=[]): Entry {
     return { type: 'stdio', command: this.paths.executable, args: [this.paths.entry, 'mcp', '--data-dir', this.paths.data,
-      '--client', client, ...workspaces.flatMap(id => ['--chat-workspace', id]),...writes.flatMap(id=>['--write-workspace',id])] };
+      '--client', client,'--read-scoped', ...workspaces.flatMap(id => ['--chat-workspace', id]),...reads.flatMap(id=>['--read-workspace',id]),...writes.flatMap(id=>['--write-workspace',id])] };
   }
   generate(input: unknown): Result<GeneratedConfig> {
     const parsed = ClientConfigInput.safeParse(input);
     if (!parsed.success) return result<GeneratedConfig>(null, null, 'INVALID_INPUT', ['Select a client and valid Workspace chat permissions.']);
-    const { client, chat_workspace_ids,write_workspace_ids } = parsed.data;
-    const entry = this.entry(client, [...new Set(chat_workspace_ids)],[...new Set(write_workspace_ids)]);
+    const { client, chat_workspace_ids,write_workspace_ids,read_workspace_ids } = parsed.data;
+    const entry = this.entry(client, [...new Set(chat_workspace_ids)],[...new Set(write_workspace_ids)],[...new Set(read_workspace_ids)]);
     const text = client === 'claude' ? JSON.stringify({ mcpServers: { [SERVER_NAME]: entry } }, null, 2) :
       `[mcp_servers.${SERVER_NAME}]\ncommand = ${JSON.stringify(entry.command)}\nargs = ${JSON.stringify(entry.args)}\nstartup_timeout_sec = 30\ntool_timeout_sec = 60\n`;
     return result({ client, format: client === 'claude' ? 'JSON' : 'TOML', config_path: this.states.find(s => s.id === client)!.config_path,
-      server_name: SERVER_NAME, text, chat_workspace_ids,write_workspace_ids });
+      server_name: SERVER_NAME, text, chat_workspace_ids,write_workspace_ids,read_workspace_ids });
   }
   private async configBytes(path:string){
     try{const info=await lstat(path);if(!info.isFile()||info.isSymbolicLink()||info.size>2_000_000)throw new Error('UNSAFE_CONFIG');return await readFile(path);}
@@ -156,8 +156,8 @@ export class ClientManager {
     }
     return result(this.snapshot());
   }
-  private async sdk(clientId: ClientKind, workspaces: string[],writes:string[]=[]) {
-    const entry = this.entry(clientId, workspaces,writes);
+  private async sdk(clientId: ClientKind, workspaces: string[],writes:string[]=[],reads:string[]=[]) {
+    const entry = this.entry(clientId, workspaces,writes,reads);
     const client = new Client({ name: 'lv999-handshake-test', version: '0.1.0' });
     try {
       const transport = new StdioClientTransport({ command: entry.command!, args: entry.args, stderr: 'pipe', env: this.paths.transportEnv });
@@ -205,18 +205,18 @@ export class ClientManager {
   async test(input: unknown): Promise<Result<ClientView>> {
     const parsed = ClientTestInput.safeParse(input);
     if (!parsed.success) return result<ClientView>(null, null, 'INVALID_INPUT', ['Select a client and handshake type.']);
-    const { client, kind, chat_workspace_ids,write_workspace_ids } = parsed.data;
+    const { client, kind, chat_workspace_ids,write_workspace_ids,read_workspace_ids } = parsed.data;
     const state = this.states.find(value => value.id === client)!;
     let profileRoot: string | null = null;
     try {
       let count: number;
-      if (kind === 'sdk') count = await this.sdk(client, chat_workspace_ids,write_workspace_ids);
+      if (kind === 'sdk') count = await this.sdk(client, chat_workspace_ids,write_workspace_ids,read_workspace_ids);
       else {
         const executable = await this.locate(client);
         if (!executable) throw new Error('CLIENT_NOT_INSTALLED');
         profileRoot = await mkdtemp(join(tmpdir(), 'lv999-client-probe-'));
         const profile = join(profileRoot, 'profile'); await mkdir(profile);
-        const generated = this.generate({ client, chat_workspace_ids,write_workspace_ids }).data!;
+        const generated = this.generate({ client, chat_workspace_ids,write_workspace_ids,read_workspace_ids }).data!;
         if (client === 'codex') { await writeFile(join(profile, 'config.toml'), generated.text); count = await this.codexNative(executable, profile); }
         else {
           await writeFile(join(profile, '.claude.json'), generated.text);
@@ -224,7 +224,7 @@ export class ClientManager {
           const probe = await this.run(executable, ['mcp', 'get', SERVER_NAME], childEnvironment({ CLAUDE_CONFIG_DIR: profile,
             DISABLE_TELEMETRY: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' }), 40000, profileRoot);
           if (!claudeHealthPassed(probe.code, probe.text)) throw new Error('NATIVE_HANDSHAKE_NOT_CONFIRMED');
-          count = await this.sdk(client, chat_workspace_ids,write_workspace_ids);
+          count = await this.sdk(client, chat_workspace_ids,write_workspace_ids,read_workspace_ids);
         }
       }
       state.handshake = { kind, ok: true, checked_at: new Date().toISOString(), tool_count: count,

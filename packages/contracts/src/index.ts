@@ -55,6 +55,7 @@ export type ProjectRoute = {
 export const ClientId = z.enum(['claude', 'codex']);
 export type ClientKind = z.infer<typeof ClientId>;
 export const ClientConfigInput = z.object({ client: ClientId, chat_workspace_ids: z.array(z.uuid().transform(id => id.toLowerCase())).max(100).default([]),
+  read_workspace_ids:z.array(z.uuid().transform(id=>id.toLowerCase())).max(100).default([]),
   write_workspace_ids:z.array(z.uuid().transform(id=>id.toLowerCase())).max(100).default([]) }).strict();
 export const ClientTestInput = ClientConfigInput.extend({ kind: z.enum(['sdk', 'native']).default('native') });
 export type ClientView = {
@@ -63,7 +64,7 @@ export type ClientView = {
   detail: string; detected_at: string | null;
   handshake: { kind: 'sdk' | 'native'; ok: boolean; checked_at: string; tool_count: number; detail: string } | null;
 };
-export type GeneratedConfig = { client: ClientKind; format: 'JSON' | 'TOML'; config_path: string; server_name: string; text: string; chat_workspace_ids: string[]; write_workspace_ids:string[] };
+export type GeneratedConfig = { client: ClientKind; format: 'JSON' | 'TOML'; config_path: string; server_name: string; text: string; chat_workspace_ids: string[]; write_workspace_ids:string[];read_workspace_ids:string[] };
 export const ChatActor = z.enum(['human', 'claude', 'codex']);
 export type ChatActorId = z.infer<typeof ChatActor>;
 export type ChatIdentity = { actor: ChatActorId; workspace_ids: string[] | 'owner' };

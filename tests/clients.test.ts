@@ -20,6 +20,8 @@ it('generates parseable credential-free configurations with startup-bound roles 
   const codex = f.manager.generate({ client: 'codex' }).data!;
   expect((parse(codex.text).mcp_servers as any).lv999.args).toContain('codex'); expect(codex.chat_workspace_ids).toEqual([]);
   expect(codex.text).not.toContain('token'); expect(codex.text).not.toContain('chat-workspace');
+  expect(codex.text).toContain('--read-scoped');expect(codex.read_workspace_ids).toEqual([]);
+  const reader=JSON.parse(f.manager.generate({client:'claude',read_workspace_ids:[id]}).data!.text);expect(reader.mcpServers.lv999.args).toContain('--read-workspace');
   const scoped=JSON.parse(f.manager.generate({client:'claude',write_workspace_ids:[id]}).data!.text);
   expect(scoped.mcpServers.lv999.args).toContain('--write-workspace');expect(codex.write_workspace_ids).toEqual([]);
 });

@@ -9,6 +9,7 @@ Owner request: support production Workspace environments and permissions, then a
 - Protected source names are normalized; once a source identity is encountered its ID stays protected even after renaming. No page search/read is sent for a protected identity.
 - Project keys: Nihilux `NX`, Kuru Kuru `KK`, 公司狼 `CW`. Dedicated project home pages will be created in their respective new spaces through Notion's own UI, then specifically selected for OAuth and mapped locally. Existing templates remain intact. No global write policy is needed to create pages through the Owner's Notion session.
 - New group and project topics use the existing persistent Messenger overview. No agent is automatically enabled/resumed and no quota-consuming model acceptance is needed for this environment/onboarding change.
+- Production content reads require an explicit startup read scope. Old unscoped MCP profiles retain test-only access; new generated profiles carry an explicit scope even when empty, so adding a production connection cannot silently disclose it to existing clients. Chat, read and write scopes are independently visible in AI Clients; effective writes are the intersection of read scope, client write scope and Workspace policy.
 
 ## Verification gates
 
