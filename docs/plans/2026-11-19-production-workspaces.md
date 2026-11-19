@@ -19,3 +19,7 @@ Owner request: support production Workspace environments and permissions, then a
 4. Existing test connections and user Stop states persist; production content writes remain off; no source migration, broad credential display or global client-config overwrite.
 
 Private runtime IDs, consent receipts and page links remain outside the public repository. Final evidence must distinguish implementation/tests, real OAuth, mapping/group persistence and any remaining manual boundary.
+
+## Outcome
+
+Environment/permission support and real onboarding passed. The Owner explicitly confirmed all three home-page OAuth grants and deletion of the accidentally created extra empty space. NX/KK/CW now resolve to their own verified roots; their production write policies remain off. Five total groups and all routes survived restart and were observed in the native Chats overview. Legacy/empty client scopes denied production data; explicit scopes read the exact roots. The extra space was deleted after exact-ID confirmation and the original same-name space remained. See [acceptance evidence](../qa/2026-11-19-production-workspaces.md). The verified final Windows build is open; no source migration, native model turn or global client-config overwrite occurred.
