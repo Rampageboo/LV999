@@ -58,7 +58,7 @@ try {
   await page.screenshot({ path: join(evidence, 'connect-workspace-dialog.png'), fullPage: true });
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.equal(await page.getByRole('dialog').count(), 0);
-  for (const name of ['Routing', 'Clients', 'Chats', 'Migration', 'Logs', 'Settings', 'Dashboard']) {
+  for (const name of ['Routing', 'Clients', 'Migration', 'Logs', 'Settings', 'Dashboard']) {
     await page.getByRole('navigation').getByRole('button', { name, exact: true }).click();
     await page.getByRole('heading', { name, exact: true, level: 1 }).waitFor();
     assert.equal(await page.getByRole('navigation').getByRole('button', { name, exact: true }).getAttribute('aria-current'), 'page');

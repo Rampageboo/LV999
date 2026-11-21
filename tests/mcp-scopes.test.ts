@@ -15,7 +15,7 @@ async function fixture(reads?:'production'|'none'){
  const vault={read:vi.fn(async(id:string)=>id),write:vi.fn(),remove:vi.fn(),probe:async()=>true};
  const service=new Service(store,vault,token=>({identity:async()=>({workspace_id:token,workspace_name:token===test?'Test':'Production target',bot_id:randomUUID()}),search:async()=>({results:[],has_more:false,next_cursor:null}),page:async id=>({object:'page',id})}));
  const server=createMcpServer(service,undefined,[production],undefined,reads==='production'?[production]:reads==='none'?[]:undefined),client=new Client({name:'scope-unit',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
- await server.connect(b);await client.connect(a);cleanup.push(async()=>{await client.close();await server.close();service.wake.shutdown();store.close();rmSync(directory,{recursive:true,force:true});});
+ await server.connect(b);await client.connect(a);cleanup.push(async()=>{await client.close();await server.close();store.close();rmSync(directory,{recursive:true,force:true});});
  const call=async(name:string,args:Record<string,unknown>={})=>{const response=await client.callTool({name,arguments:args});return JSON.parse((response.content as {text:string}[])[0].text);};
  return{store,service,vault,test,production,call};
 }

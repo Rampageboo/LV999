@@ -1,6 +1,6 @@
 # Native client capability matrix — 2026-11-19
 
-Observed locally: Claude Code **2.1.205**, Codex CLI **0.144.1**. Handshake tests use disposable profiles and no model turns. Earlier real wake tests used native sign-in and owned sessions. Current Owner-selected workflow uses ordinary Notion message boards with automatic bindings disabled. Scoped board-only entries were installed in both user configurations with backups, preserving unrelated settings and existing model conversations. See [board acceptance](qa/2026-11-19-message-boards.md) and earlier [content acceptance](qa/2026-11-19-m1-content.md).
+Observed locally: Claude Code **2.1.205**, Codex CLI **0.144.1**. Handshake tests use disposable profiles and no model turns. Agent coordination uses ordinary Notion message boards; group chats and automatic wake were removed on 2026-11-21. Scoped board-only entries were installed in both user configurations with backups, preserving unrelated settings and existing model conversations. See [board acceptance](qa/2026-11-19-message-boards.md) and earlier [content acceptance](qa/2026-11-19-m1-content.md).
 
 | Capability | Evidence/status |
 |---|---|
@@ -8,7 +8,7 @@ Observed locally: Claude Code **2.1.205**, Codex CLI **0.144.1**. Handshake test
 | Codex stdio MCP | **Verified**: installed `codex app-server --stdio`, `initialize`, `initialized`, `mcpServerStatus/list`; LV999 server info and its tool inventory returned. 36 tools discovered. |
 | LV999 SDK transport for both generated profiles | **Verified**: initialize, tools/list and local list_workspaces call. This is displayed separately from native-client evidence. |
 | User/global configuration detection | **Verified**: known user paths parsed safely; only the owned entry status returned. Current saved entries match the verified board-only runtime, with five project grants each. Handshake evidence is separate from file matching. |
-| Ordinary Notion message boards | **Verified**: exactly three board tools in both installed client handshakes; both connection roles appended/read all five real boards, with retry deduplication and zero native model turns. Ordinary page posts never enqueue wake requests. Current saved profiles omit generic content/wake tools. |
+| Ordinary Notion message boards | **Verified**: exactly three board tools in both installed client handshakes; both connection roles appended/read all five real boards, with retry deduplication and zero native model turns. Current saved profiles omit generic content tools. |
 | Project/managed client configuration detection | Not implemented; the UI explicitly reports user-scope paths. |
 | Claude Channels | Documented research preview; no running Channel/session or policy compatibility test performed. Not used. |
 | Claude CLI session create/resume | **Verified in both test Workspaces**: owned session, real scoped Notion tool write/readback and a second turn reusing that session. Native `sonnet`, low effort and strict JSON receipt schema. Message-only uses safe-mode; Notion mode uses strict MCP config and no built-in shell/file tools. `--bare` is not used because it skips native OAuth/keychain sign-in. |
@@ -18,7 +18,6 @@ Observed locally: Claude Code **2.1.205**, Codex CLI **0.144.1**. Handshake test
 | Native Notion content tools | **Verified for both actors in both test Workspaces**: actual create/write/readback through MCP plus ledger evidence. Managed profiles expose 31 content/router tools, restrict reads to the bound Workspace and omit Messenger send tools. Destructive approval is stored in LV999; no model can self-approve. |
 | Codex queue | Not advertised by this installed CLI's command list; do not depend on it. `queue --help` returned the root help rather than proving queue support. |
 | Existing desktop chat synchronization | Unverified. Native MCP discovery does not establish control/synchronization of the Owner's currently open desktop conversations. |
-| Automatic wake and binding | **Verified** for structured @ targets, owned sessions and same-session follow-up. Ordinary text/literal @ does not launch a turn. Busy-turn queue, explicit retry and late-reply fencing have regression coverage. The verified Windows CI app was opened and its native Content write/readback passed. |
 | Task execution/completion | Scoped Notion content actions are implemented and independently verified. OS/project-command execution and full Supervisor recovery are not implemented; a consumption receipt is not a general task Done claim. |
 
 Installed protocol schemas were generated locally and checked rather than assuming the current website exactly matched 0.144.1. For example this installation's status-list input does not have the documented newer `serverName` field, so the test isolates the profile instead of relying on that filter.

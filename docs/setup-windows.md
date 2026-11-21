@@ -1,6 +1,6 @@
 # Windows bootstrap
 
-Milestone 1 now includes scoped Notion content writes, GUI content review, safe client configuration application and optional Notion tools in managed group sessions. Both test Workspaces passed real CRUD and Claude/Codex creation/write/readback; Claude new-session/resume/Stop checks also passed. See [content and native-client acceptance](qa/2026-11-19-m1-content.md) for build/GUI evidence and remaining boundaries. Do not use Vibecode or Honour. Local native compilation remains blocked by Smart App Control; Windows packages are built in GitHub CI. Closing the host pauses enabled bindings and stops its backend. Tray/background operation, autostart and full single-instance recovery remain Milestone 2.
+Milestone 1 now includes scoped Notion content writes, GUI content review, safe client configuration application. Both test Workspaces passed real CRUD and Claude/Codex creation/write/readback; See [content and native-client acceptance](qa/2026-11-19-m1-content.md) for build/GUI evidence and remaining boundaries. Do not use Vibecode or Honour. Local native compilation remains blocked by Smart App Control; Windows packages are built in GitHub CI. Closing the host stops its backend. Tray/background operation, autostart and full single-instance recovery remain Milestone 2.
 
 ## Build and run
 
@@ -84,16 +84,16 @@ Automated OAuth tests use scripted responses and generated vault secrets. Separa
 
 ## Project message boards — no automatic turns
 
-Each project can have one ordinary `留言板` child page under its mapped root. Open it in Notion to leave a note, or manually ask Claude Code/Codex to read and reply through MCP. Messages never wake a model by themselves; managed automatic bindings remain disabled for this workflow.
+Each project can have one ordinary `留言板` child page under its mapped root. Open it in Notion to leave a note, or manually ask Claude Code/Codex to read and reply through MCP. Messages never start a model turn by themselves.
 
-Routing offers **Create / verify message board**, **Copy board link** and **Pause board posting**. In AI Clients, choose **Message-board-only profile**, select the project keys, generate/review/apply the LV999 entry, then restart/reload the native client. This profile has exactly three tools: `list_message_boards`, `read_message_board`, `post_message_board`. It grants read/append on those registered pages, with no general page edit/delete or Messenger wake tools. Other production content keeps its global read-only policy. Existing full Notion profiles remain an advanced separate option.
+Routing offers **Create / verify message board**, **Copy board link** and **Pause board posting**. In AI Clients, choose **Message-board-only profile**, select the project keys, generate/review/apply the LV999 entry, then restart/reload the native client. This profile has exactly three tools: `list_message_boards`, `read_message_board`, `post_message_board`. It grants read/append on those registered pages, with no general page edit/delete tools. Other production content keeps its global read-only policy. Existing full Notion profiles remain an advanced separate option.
 
 For example, ask the client: “读取 NX 留言板；如果需要回复，请追加一条留言。” Posting requires a UUID retry key; repeat the same key/body after a busy or uncertain response and never invent a new key after an unknown outcome. Reading a long board may require pagination. The sender label is the configured connection role; timestamps are ISO UTC. Test/check messages are labelled as checks, not model replies. See [acceptance](qa/2026-11-19-message-boards.md).
 
 ## AI Clients
 
 1. Open Clients → **Detect clients**. CLI version/path and the known user configuration path are detected. Only the LV999 entry's state is returned; other server settings/secrets are not displayed. Project/managed scopes are outside this detector. Missing/different/invalid entries are never called Connected.
-2. Select **Notion read access** explicitly for production targets. Generated profiles include a read scope even when empty; zero selected means zero content reads. Old unscoped profiles retain test-only reads and never gain production access just because a new target is connected. **Chat access** and **Notion write access** are independent opt-ins. Writes also require read scope and the Workspace policy on Content; production policy changes require exact-ID Owner confirmation. Managed sessions read only their bound Workspace. Disabling Workspace writes works offline.
+2. Select **Notion read access** explicitly for production targets. Generated profiles include a read scope even when empty; zero selected means zero content reads. Old unscoped profiles retain test-only reads and never gain production access just because a new target is connected. **Notion write access** is a separate opt-in. Writes also require read scope and the Workspace policy on Content; production policy changes require exact-ID Owner confirmation. Disabling Workspace writes works offline.
 3. **Generate configuration**, then **Preview application** → **Apply reviewed LV999 entry** to update the indicated user file (`~/.claude.json` or `~/.codex/config.toml`, honoring configured client-home overrides). Close the native client first and reload it afterwards. Only the LV999 entry changes; existing files receive byte-exact backups, and a changed file requires a fresh preview. Unsupported inline TOML needs a manual merge using **Copy configuration**. Do not put runtime-specific snippets or backups in this public repo.
 4. **Test LV999 transport** runs SDK initialize/tool discovery/a local read call. **Test native client** runs the installed client against a temporary profile/working directory containing only LV999. Native Claude uses its MCP health check; native Codex uses App Server initialization/status discovery. Neither starts a model turn or alters an existing session. Isolated handshake success does not mean your saved user entry is installed/enabled in a live model session.
 
@@ -101,27 +101,6 @@ Native versions/capability limits are recorded in [the matrix](messenger-capabil
 
 ```powershell
 npm run test:clients-native
-```
-
-## Workspace group chats
-
-Every registered Workspace has a local group, even without a Project. Use **Open group chat** on Workspaces, **Open project chat** on a Routing row, or the standalone **Chats** page. All open the same stored conversation data. The conversation directory provides an All conversations overview, project topics and Workspace groups; messages are not copied/scattered across independent project stores.
-
-The chat uses ordinary message bubbles, participant names, a scrolling history and fixed input. Enter sends; Shift+Enter adds a newline. Use Reply for a quote, search loaded messages or load older history. Workspace groups include all their topics; project views also retain historical messages after reassignment. Sending a project message checks the current local route revision/Workspace. A changed target requires a new valid topic/route selection.
-
-You/Claude/Codex have independent receipts. Previews and handshake tests do not mark a message read. A full-body read API records only that reader; **Read via API is not proof of model understanding or task completion**. A native wake records consumption only after a matching reply receipt, and still does not claim task Done. Presence shows LV999 binding/turn state, not every native desktop conversation. Configured clients can also use `list_unread`, `read_message`, `send_message` and `ack_message` in their allowed groups.
-
-Ordinary text, including typed `@Claude`/`@Codex`, only saves a message. Open **Agent sessions**, choose a native model/effort and enable the desired actor for this Workspace or project. The first explicitly selected @ chip creates a new LV999-owned session automatically; following mentions resume it. Existing conversations are never attached. **Allow scoped Notion tools** is separately opt-in; it restricts reads to the bound Workspace and project writes to the message's exact route. Shell, project commands and unrelated MCP servers are unavailable. Changing tool access creates a new owned session. Real acceptance passed with Claude `sonnet` and Codex `gpt-5.6-sol`, low effort, using their native sign-ins and quota. Model availability is account-specific.
-
-**Stop** persists pause before interrupting the owned process and fences late replies. New mentions, incoming acknowledgements, restarts and stale settings cannot resume it. **Resume** explicitly allows future mentions; cancelled/blocked messages require their own **Retry**. Authentication/quota/errors and unknown expired outcomes block rather than auto-retrying. Normal app exit pauses enabled bindings. The reference Messenger's complete task supervisor/recovery remains pending. See [the adapted scope](agent-messenger.md).
-
-Messages/receipts persist in the local registry; uninstall retains them. Don't paste credentials into chat. UI polling is local and visibility-scoped; there is no HTTP/WebSocket management service. OAuth has a separate short-lived loopback callback. Scripted tests do not consume model quota. Native wake probes below deliberately do and are separate from `npm test`:
-
-```powershell
-npm run test:clients-chat-gui
-# Native account/model activity; app-owned sessions only:
-node scripts/wake-native-probe.mjs
-node scripts/wake-native-probe.mjs --stop-only
 ```
 
 ## Developer fallback

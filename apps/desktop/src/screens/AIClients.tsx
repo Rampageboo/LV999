@@ -8,7 +8,6 @@ export function AIClients({ data }: { data: Snapshot }) {
   const [failure, setFailure] = useState<string | null>(null);
   const [config, setConfig] = useState<GeneratedConfig | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
-  const [access, setAccess] = useState<Record<ClientKind, string[]>>({ claude: [], codex: [] });
   const [writes,setWrites]=useState<Record<ClientKind,string[]>>({claude:[],codex:[]});
   const [reads,setReads]=useState<Record<ClientKind,string[]>>({claude:data.workspaces.filter(w=>w.environment==='test').map(w=>w.id),codex:data.workspaces.filter(w=>w.environment==='test').map(w=>w.id)});
   const [preview,setPreview]=useState<ClientConfigPreview|null>(null);
@@ -21,13 +20,13 @@ export function AIClients({ data }: { data: Snapshot }) {
   useEffect(() => { void detect(); }, []);
   async function generate(client: ClientKind) {
     setBusy(client); setFailure(null); setCopyMessage('');setPreview(null);
-    try { const response = await generateClientConfig(client, access[client],writes[client],reads[client],boardProjects[client],boardsOnly[client]); if (response.ok) setConfig(response.data!); else setFailure(response.errors.join(' ')); }
+    try { const response = await generateClientConfig(client, writes[client],reads[client],boardProjects[client],boardsOnly[client]); if (response.ok) setConfig(response.data!); else setFailure(response.errors.join(' ')); }
     catch { setFailure('Configuration generation failed. No client file was changed.'); } finally { setBusy(null); }
   }
   async function test(client: ClientKind, kind: 'native' | 'sdk') {
     setBusy(client); setFailure(null);
     try {
-      const response = await testClient(client, kind, access[client],writes[client],reads[client],boardProjects[client],boardsOnly[client]);
+      const response = await testClient(client, kind, writes[client],reads[client],boardProjects[client],boardsOnly[client]);
       if (response.data) setClients(previous => previous.map(item => item.id === client ? response.data! : item));
       if (!response.ok) setFailure(response.errors.join(' '));
     } catch { setFailure('Handshake response unavailable. No connection success is assumed.'); } finally { setBusy(null); }
@@ -42,19 +41,14 @@ export function AIClients({ data }: { data: Snapshot }) {
       <dl><dt>Installed version</dt><dd>{client.version ?? 'Not detected'}</dd><dt>CLI path</dt><dd className="mono">{client.executable ?? 'Not found on PATH'}</dd>
         <dt>User configuration</dt><dd className="mono">{client.config_path}</dd><dt>LV999 entry</dt><dd>{client.config_state}</dd></dl>
       {client.status==='Degraded'?<p className="notice">{client.detail}</p>:null}
-      <fieldset className="chat-permissions" disabled={busy!==null}><legend>Notion project message boards</legend>
+      <fieldset className="permission-group" disabled={busy!==null}><legend>Notion project message boards</legend>
         <label className="test-confirm"><input type="checkbox" checked={boardsOnly[client.id]} onChange={e=>{setBoardsOnly(old=>({...old,[client.id]:e.target.checked}));setConfig(null);}}/>Message-board-only profile (three tools; no automatic turns)</label>
         {data.projects.map(project=><label className="test-confirm" key={project.project_key}><input type="checkbox" checked={boardProjects[client.id].includes(project.project_key)} onChange={e=>{setBoardProjects(old=>({...old,[client.id]:e.target.checked?[...old[client.id],project.project_key]:old[client.id].filter(key=>key!==project.project_key)}));setConfig(null);}}/>{project.project_key} · {project.name}</label>)}
       </fieldset>
-      <fieldset className="chat-permissions" disabled={busy !== null||boardsOnly[client.id]}><legend>Chat access in the generated configuration (opt-in)</legend>
-        {data.workspaces.length ? data.workspaces.map(workspace => <label className="test-confirm" key={workspace.id}><input type="checkbox" checked={access[client.id].includes(workspace.id)}
-          onChange={event => { setAccess(previous => ({ ...previous, [client.id]: event.target.checked ? [...previous[client.id], workspace.id] : previous[client.id].filter(id => id !== workspace.id) })); setConfig(null); }} />{workspace.label}</label>)
-          : <p className="field-hint">No Workspace is configured. New configurations grant no chat access until selected here.</p>}
-      </fieldset>
-      <fieldset className="chat-permissions" disabled={busy!==null||boardsOnly[client.id]}><legend>Notion read access in the generated configuration</legend>
+      <fieldset className="permission-group" disabled={busy!==null||boardsOnly[client.id]}><legend>Notion read access in the generated configuration</legend>
         {data.workspaces.map(workspace=><label className="test-confirm" key={workspace.id}><input type="checkbox" checked={reads[client.id].includes(workspace.id)} onChange={event=>{setReads(previous=>({...previous,[client.id]:event.target.checked?[...previous[client.id],workspace.id]:previous[client.id].filter(id=>id!==workspace.id)}));if(!event.target.checked)setWrites(previous=>({...previous,[client.id]:previous[client.id].filter(id=>id!==workspace.id)}));setConfig(null);}}/>{workspace.label} · {workspace.environment==='production'?'Production target':'Test'}</label>)}
       </fieldset>
-      <fieldset className="chat-permissions" disabled={busy!==null||boardsOnly[client.id]}><legend>Notion write access in the generated configuration (opt-in)</legend>
+      <fieldset className="permission-group" disabled={busy!==null||boardsOnly[client.id]}><legend>Notion write access in the generated configuration (opt-in)</legend>
         {data.workspaces.map(workspace=><label className="test-confirm" key={workspace.id}><input type="checkbox" disabled={!workspace.write_enabled||!reads[client.id].includes(workspace.id)} checked={writes[client.id].includes(workspace.id)} onChange={event=>{setWrites(previous=>({...previous,[client.id]:event.target.checked?[...previous[client.id],workspace.id]:previous[client.id].filter(id=>id!==workspace.id)}));setConfig(null);}}/>{workspace.label}{!workspace.write_enabled?' · enable Workspace writes on Content first':!reads[client.id].includes(workspace.id)?' · select read access first':''}</label>)}
       </fieldset>
       <div className="workspace-actions"><button disabled={busy !== null} onClick={() => void generate(client.id)}>Generate configuration</button>

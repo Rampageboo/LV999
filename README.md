@@ -13,8 +13,7 @@ Windows 上统一管理多个 Notion Workspace 的本地工具：一个 MCP 后�
 - Workspace GUI 进度：[docs/qa/2026-11-16-milestone-1-workspaces.md](docs/qa/2026-11-16-milestone-1-workspaces.md)
 - 页面浏览与路由进度：[docs/qa/2026-11-16-milestone-1-routing.md](docs/qa/2026-11-16-milestone-1-routing.md)
 - 客户端与群聊进度：[docs/qa/2026-11-16-milestone-1-clients-chat.md](docs/qa/2026-11-16-milestone-1-clients-chat.md)
-- 群聊与 Messenger 范围：[docs/agent-messenger.md](docs/agent-messenger.md)
-- 唤醒与 OAuth 进度及构建阻塞：[docs/qa/2026-11-16-milestone-1-wake-oauth.md](docs/qa/2026-11-16-milestone-1-wake-oauth.md)
+- OAuth 进度及构建阻塞（历史记录，其中的唤醒功能已移除）：[docs/qa/2026-11-16-milestone-1-wake-oauth.md](docs/qa/2026-11-16-milestone-1-wake-oauth.md)
 - Windows CI 构建与原生启动：[docs/qa/2026-11-16-windows-ci-oauth.md](docs/qa/2026-11-16-windows-ci-oauth.md)
 - 真实 OAuth 与双测试空间只读验收：[docs/qa/2026-11-19-real-oauth.md](docs/qa/2026-11-19-real-oauth.md)
 

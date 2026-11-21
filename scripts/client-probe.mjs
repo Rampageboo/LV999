@@ -12,7 +12,7 @@ try {
   const detected = await manager.detect();
   console.log(JSON.stringify(detected.data.map(value => ({ client: value.id, version: value.version, config: value.config_state, status: value.status }))));
   for (const client of ['claude', 'codex']) for (const kind of ['sdk', 'native']) {
-    const response = await manager.test({ client, kind, chat_workspace_ids: [] });
+    const response = await manager.test({ client, kind });
     console.log(JSON.stringify({ client, kind, ok: response.ok, handshake: response.data?.handshake }));
   }
 } finally {

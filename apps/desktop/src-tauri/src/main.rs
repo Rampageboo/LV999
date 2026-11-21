@@ -99,9 +99,9 @@ async fn page_route_request(method: String, input: serde_json::Value, state: tau
 }
 
 #[tauri::command]
-async fn client_chat_request(method: String, input: serde_json::Value, state: tauri::State<'_, SharedBackend>) -> Result<serde_json::Value, String> {
-    if !matches!(method.as_str(), "detect_clients" | "generate_client_config" | "preview_client_config" | "apply_client_config" | "test_client" | "chat_overview" | "read_chat" | "send_chat" | "configure_agent" | "stop_agent" | "resume_agent" | "retry_wake") {
-        return Err("Unsupported client/chat operation.".into());
+async fn client_request(method: String, input: serde_json::Value, state: tauri::State<'_, SharedBackend>) -> Result<serde_json::Value, String> {
+    if !matches!(method.as_str(), "detect_clients" | "generate_client_config" | "preview_client_config" | "apply_client_config" | "test_client") {
+        return Err("Unsupported client operation.".into());
     }
     let backend = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -162,7 +162,7 @@ fn main() {
             app.manage(Arc::new(Mutex::new(backend)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace, page_route_request, client_chat_request, oauth_request, open_notion_authorization, content_request])
+        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace, page_route_request, client_request, oauth_request, open_notion_authorization, content_request])
         .build(tauri::generate_context!())
         .expect("LV999 desktop could not start")
         .run(|app, event| {

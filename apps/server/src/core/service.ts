@@ -8,10 +8,6 @@ import { Store, projectNameLookup } from '../infra/store.js';
 import { pageBatch, pageMetadata, pageReference } from '../notion/page-metadata.js';
 import type { Vault } from '../infra/vault.js';
 import { ClientManager } from '../management/clients.js';
-import { MessageHub } from '../messenger/hub.js';
-import { WakeEngine } from '../messenger/wake-engine.js';
-import type { AgentBridge } from '../messenger/native-bridge.js';
-import type { ChatIdentity } from '../../../../packages/contracts/src/index.js';
 import { NotionOAuth } from '../management/notion-oauth.js';
 import { decodeCredential, encodeCredential, type OAuthCredential, type OAuthEvidence, type OAuthExchange } from '../notion/oauth-credential.js';
 import { ContentService } from './content-service.js';
@@ -24,8 +20,6 @@ export class Service {
   readonly started = new Date().toISOString();
   private vaultReady = false;
   readonly clients: ClientManager;
-  readonly messages: MessageHub;
-  readonly wake:WakeEngine;
   readonly oauth: NotionOAuth;
   readonly content: ContentService;
   readonly boards:MessageBoards;
@@ -33,11 +27,9 @@ export class Service {
   private makeAdapter:(token:string,oauth?:OAuthEvidence)=>NotionAdapter;
   constructor(readonly store: Store, private vault: Vault,
     makeAdapter?: (token: string, oauth?: OAuthEvidence) => NotionAdapter,
-    local?: { clients?: ClientManager; bridge?:AgentBridge; oauth?: OAuthExchange; oauthPort?: number; oauthTtlMs?: number }) {
+    local?: { clients?: ClientManager; oauth?: OAuthExchange; oauthPort?: number; oauthTtlMs?: number }) {
     this.makeAdapter=makeAdapter??((token,oauth)=>new OfficialNotionAdapter(token,undefined,oauth,()=>store.requestSlot(createHash('sha256').update(token).digest('hex'),notionRequestSignal())));
     this.clients = local?.clients ?? new ClientManager(store.directory);
-    this.messages = new MessageHub(store);
-    this.wake=new WakeEngine(this.messages,local?.bridge,{executable:this.clients.paths.executable,entry:this.clients.paths.entry});
     this.oauth = new NotionOAuth(store, vault, (credential, input) => this.connectOAuth(credential, input), local?.oauth, local?.oauthPort, local?.oauthTtlMs);
     this.content = new ContentService(store,id=>this.verifiedAdapter(id));
     this.boards=new MessageBoards(store,this.content);
@@ -54,13 +46,6 @@ export class Service {
   previewClientConfig(input:unknown){return this.clients.previewApply(input);}
   applyClientConfig(input:unknown){return this.clients.apply(input);}
   testClient(input: unknown) { return this.clients.test(input); }
-  chatOverview() { return this.messages.overview({ actor: 'human', workspace_ids: 'owner' }); }
-  readChat(input: unknown) { return this.messages.read({ actor: 'human', workspace_ids: 'owner' }, input); }
-  sendChat(input: unknown) { return this.messages.send({ actor: 'human', workspace_ids: 'owner' }, input); }
-  configureAgent(input:unknown){return this.wake.configure(input);}
-  stopAgent(id:string){return this.wake.stop(id);}
-  resumeAgent(id:string,revision:number){return this.wake.resume(id,revision);}
-  retryWake(id:string,revision:number){return this.wake.retry(id,revision);}
   async initialize() {
     this.vaultReady = await this.vault.probe();
     this.store.log({ level: 'info', action: 'Backend started', workspace_id: null, code: 'OK' });
@@ -363,7 +348,7 @@ export class Service {
       clients: this.clients.snapshot(),
       jobs: this.migrations.list(), settings: { read_only: !workspaces.some(w=>w.write_enabled||w.board_append_projects.length), remote_enabled: false, autostart: false, api_version: NOTION_VERSION,
         data_dir: this.store.directory, updater_configured: false },
-      capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: true, group_chat: true, auto_wake: true, migration: false, content_write: true },
+      capabilities: { connect_in_gui: true, browse_pages: true, routing: true, client_config: true, migration: false, content_write: true },
     };
   }
 }

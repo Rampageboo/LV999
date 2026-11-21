@@ -12,11 +12,10 @@ import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import { fixtureId, fixtureToken } from '../tests/fixtures/workspace-identity.ts';
 import { runRoutingFlow } from './routing-gui-flow.mjs';
-import { runClientsChatFlow } from './clients-chat-gui-flow.mjs';
 
 const base = await mkdtemp(join(tmpdir(), 'lv999-workspace-test-'));
-const positionalArgs = process.argv.slice(2).filter(arg => !['--routing', '--clients-chat'].includes(arg));
-const evidence = resolve(positionalArgs[1] ?? join(tmpdir(), process.argv.includes('--routing') ? 'lv999-routing-qa' : process.argv.includes('--clients-chat') ? 'lv999-chat-qa' : 'lv999-workspace-qa'));
+const positionalArgs = process.argv.slice(2).filter(arg => !['--routing'].includes(arg));
+const evidence = resolve(positionalArgs[1] ?? join(tmpdir(), process.argv.includes('--routing') ? 'lv999-routing-qa' : 'lv999-workspace-qa'));
 const original = resolve(positionalArgs[0] ?? 'apps/desktop/src-tauri/target/release/lv999-desktop.exe');
 const runtime = join(base, 'app', 'runtime');
 const seed = randomUUID();
@@ -133,12 +132,7 @@ try {
   assert.equal((await state()).workspaces[0].read_access.sampled_objects, 2);
   console.log('PASS: native form confirmation, masked input, cancel cleanup, API identity/read probe and real vault write/readback');
 
-  if (process.argv.includes('--clients-chat')) {
-    dialog = await open(); await submit(dialog, 'beta', ''); await connected(dialog, 'Test Beta');
-    await runClientsChatFlow({ getPage: () => page, getBrowser: () => browser, state, seed, base, evidence, stop, start });
-    await noLeak(); assert.deepEqual(errors, []);
-    console.log(`Clients/chat evidence (scripted agents, simulated Notion HTTP, real native/vault/storage): ${evidence}`);
-  } else if (process.argv.includes('--routing')) {
+  if (process.argv.includes('--routing')) {
     dialog = await open(); await submit(dialog, 'beta', ''); await connected(dialog, 'Test Beta');
     await runRoutingFlow({ getPage: () => page, getBrowser: () => browser, state, seed, base, evidence, stop, start });
     await noLeak(); assert.deepEqual(errors, []);
