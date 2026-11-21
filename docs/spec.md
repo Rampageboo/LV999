@@ -637,8 +637,6 @@ unified-notion-mcp/
 
 **声明：** 此文档是设计与实施规格；新增 Windows GUI 是**开发要求**，不是已经交付的功能。当前并未新建 Notion Workspace、开发/部署 GUI 或 MCP 服务器、迁移数据、验证外部客户端的真实运行状态。需要完成开发后逐项验收。
 
-## 13. 2026-11-16 产品补充：Workspace 群聊
+## 13. 2026-11-21 变更：移除群聊与自动唤醒
 
-Owner 将 Agent Messenger 纳入 LV999。每个配置的 Workspace 都必须有群聊；Workspaces 页面有入口，另提供独立 Chats 页面，以 Project 组织并保留跨群组总览，不能只把聊天分散在项目内部。Project 主题使用相同的 Workspace 消息记录，路由变更不静默移动历史。
-
-本轮实现客户端检测/配置生成/隔离握手及持久化群聊基础。普通消息不自动启动 Agent，已读和任务完成分开。原生自动唤醒、会话 Bridge、Supervisor 和任务证据按后续阶段实现，不能因 MCP 握手成功就宣称这些已实现。详见 [适配规格](agent-messenger.md) 和各切片验收记录；前文未实现状态声明属于最初规格基线，不替代后续验收记录。
+2026-11-16 曾加入 Workspace 群聊与自动唤醒（Agent Messenger）。2026-11-21 起改用每个项目的 Notion 普通页面留言板：Claude、Codex 只在用户发起任务后通过 MCP 读写，留言不会触发 turn。本地群聊、@ 唤醒、原生会话桥及其管理入口均已移除；历史设计见 git 记录与 `docs/plans`、`docs/qa` 中的旧文档。

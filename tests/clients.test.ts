@@ -15,18 +15,18 @@ function fixture() {
 }
 it('generates parseable credential-free configurations with startup-bound roles and explicit chat access', () => {
   const f = fixture(), id = randomUUID();
-  const claude = f.manager.generate({ client: 'claude', chat_workspace_ids: [id] }).data!;
+  const claude = f.manager.generate({ client: 'claude', read_workspace_ids: [id] }).data!;
   expect(JSON.parse(claude.text).mcpServers.lv999.args).toContain('claude'); expect(JSON.parse(claude.text).mcpServers.lv999.args).toContain(id);
   const codex = f.manager.generate({ client: 'codex' }).data!;
-  expect((parse(codex.text).mcp_servers as any).lv999.args).toContain('codex'); expect(codex.chat_workspace_ids).toEqual([]);
+  expect((parse(codex.text).mcp_servers as any).lv999.args).toContain('codex');
   expect(codex.text).not.toContain('token'); expect(codex.text).not.toContain('chat-workspace');
   expect(codex.text).toContain('--read-scoped');expect(codex.read_workspace_ids).toEqual([]);
   const reader=JSON.parse(f.manager.generate({client:'claude',read_workspace_ids:[id]}).data!.text);expect(reader.mcpServers.lv999.args).toContain('--read-workspace');
   const scoped=JSON.parse(f.manager.generate({client:'claude',write_workspace_ids:[id]}).data!.text);
   expect(scoped.mcpServers.lv999.args).toContain('--write-workspace');expect(codex.write_workspace_ids).toEqual([]);
 });
-it('generates a board-only profile with project grants and no broad content/chat scopes',()=>{
- const f=fixture(),id=randomUUID(),profile=f.manager.generate({client:'claude',boards_only:true,board_project_keys:['P'],read_workspace_ids:[id],write_workspace_ids:[id],chat_workspace_ids:[id]}).data!,entry=JSON.parse(profile.text).mcpServers.lv999;
+it('generates a board-only profile with project grants and no broad content scopes',()=>{
+ const f=fixture(),id=randomUUID(),profile=f.manager.generate({client:'claude',boards_only:true,board_project_keys:['P'],read_workspace_ids:[id],write_workspace_ids:[id]}).data!,entry=JSON.parse(profile.text).mcpServers.lv999;
  expect(entry.args).toContain('--boards-only');expect(entry.args).toContain('--board-project');expect(entry.args).toContain('P');expect(entry.args).not.toContain('--write-workspace');expect(entry.args).not.toContain('--read-workspace');expect(entry.args).not.toContain('--chat-workspace');expect(profile.text).not.toContain(id);
 });
 it('detection returns only owned-entry status and preserves unrelated private configuration', async () => {

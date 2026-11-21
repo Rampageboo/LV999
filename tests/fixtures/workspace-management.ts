@@ -10,8 +10,7 @@ import { createMcpServer } from '../../apps/server/src/mcp/server.js';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { ClientManager } from '../../apps/server/src/management/clients.js';
 import { join } from 'node:path';
-import { ChatActor, type ChatIdentity } from '../../packages/contracts/src/index.js';
-import { BridgeFailure } from '../../apps/server/src/messenger/native-bridge.js';
+import { Actor } from '../../packages/contracts/src/index.js';
 
 const directory = process.env.LV999_QA_DIRECTORY;
 const seed = process.env.LV999_QA_SEED;
@@ -66,19 +65,13 @@ const service = new Service(store, new WindowsVault(), token => {
     const kind = ('code' in grant && grant.code === 'beta') || ('refresh_token' in grant && grant.refresh_token === fixtureId(seed!, 'beta-refresh')) ? 'beta' : 'alpha';
     return { kind: 'lv999-oauth-v1', client_id: clientId, access_token: `qa:${kind}:${seed}`, refresh_token: fixtureId(seed!, `${kind}-refresh`),
       owner_id: fixtureId(seed!, 'owner'), identity: { workspace_id: fixtureId(seed!, kind), workspace_name: kind === 'alpha' ? 'Test Alpha' : 'Test Beta', bot_id: fixtureId(seed!, 'bot') } };
-  } }, bridge:{run:async input=>{
-  if(input.actor==='claude')throw new BridgeFailure('AUTH_REQUIRED','Scripted auth block');
-  input.onSession(input.nativeId??fixtureId(seed!,'managed-codex-session'));input.onDelivered();
-  await new Promise(resolve=>setTimeout(resolve,input.body.includes('hold native test')?5000:100));
-  return{message_id:input.messageId,receipt_nonce:input.nonce,reply:`Scripted managed ${input.actor} reply`};
-}},clients: new ClientManager(directory, { home: directory, codexHome: join(directory, 'client-profile'), claudeConfig: join(directory, 'claude-profile.json'),
+  } }, clients: new ClientManager(directory, { home: directory, codexHome: join(directory, 'client-profile'), claudeConfig: join(directory, 'claude-profile.json'),
   transportEnv: { LV999_QA_DIRECTORY: directory, LV999_QA_SEED: seed } }) });
 await service.initialize();
 if (process.argv[2] === 'mcp') {
   const args = process.argv.slice(2);
-  const actor = ChatActor.safeParse(args[args.indexOf('--client') + 1]);
-  const identity: ChatIdentity | undefined = actor.success && actor.data !== 'human' ? { actor: actor.data, workspace_ids: args.flatMap((arg, index) => arg === '--chat-workspace' ? [args[index + 1]] : []) } : undefined;
-  const server = createMcpServer(service, identity);
+  const parsedActor = Actor.safeParse(args[args.indexOf('--client') + 1]);
+  const server = createMcpServer(service, parsedActor.success && parsedActor.data !== 'human' ? parsedActor.data : undefined);
   await server.connect(new StdioServerTransport());
   process.stdin.once('end', () => { void server.close().finally(() => store.close()); });
-} else { service.wake.start();await runManagement(service);await service.wake.stopAll();await service.oauth.close();store.close(); }
+} else { await runManagement(service);await service.oauth.close();store.close(); }

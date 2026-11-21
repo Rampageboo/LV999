@@ -4,9 +4,8 @@ import { connectWorkspace, reauthorizeWorkspace, verifyWorkspace, refreshOAuth }
 import { EmptyState, Status } from '../components/Primitives.js';
 import { WorkspaceConnectionDialog } from '../components/WorkspaceConnectionDialog.js';
 import { PageBrowser } from '../components/PageBrowser.js';
-import type { ChatSelection } from './Chats.js';
 import { NotionOAuthDialog } from '../components/NotionOAuthDialog.js';
-export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refresh: () => Promise<void>; openChat: (selection: ChatSelection) => void }) {
+export function Workspaces({ data, refresh }: { data: Snapshot; refresh: () => Promise<void> }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -59,10 +58,10 @@ export function Workspaces({ data, refresh, openChat }: { data: Snapshot; refres
         <button onClick={() => w.auth_kind === 'oauth' ? setOAuth({ workspace: w }) : openConnection(w)} disabled={busy !== null}>Reauthorize</button>
         {w.auth_kind !== 'oauth' ? <button disabled={busy !== null} onClick={() => setOAuth({ workspace: w })}>Switch to OAuth</button> : null}
         {w.auth_kind === 'oauth' ? <button disabled={busy !== null} onClick={() => void renew(w.id)}>Refresh OAuth token</button> : null}
-        <button onClick={() => openChat({ workspace_id: w.id })} disabled={busy !== null}>Open group chat</button>
+        
         <button disabled={busy !== null || !data.capabilities.browse_pages} onClick={() => setBrowsing(browsing === w.id ? null : w.id)}>{browsing === w.id ? 'Hide pages' : 'Browse pages'}</button></div>
       {browsing === w.id ? <PageBrowser key={w.id} workspaceId={w.id} onStateChange={refresh} /> : null}
-    </section>)}</div> : <EmptyState title="No Workspaces configured">Authorize a production target or test Workspace. Each gets its own group chat. Production targets start read-only; Vibecode and Honour remain protected.</EmptyState>}
+    </section>)}</div> : <EmptyState title="No Workspaces configured">Authorize a production target or test Workspace. Production targets start read-only; Vibecode and Honour remain protected.</EmptyState>}
     {dialog ? <WorkspaceConnectionDialog workspace={dialog.workspace} busy={busy !== null} failure={failure} onClose={() => setDialog(null)} onSubmit={submit} /> : null}
     {oauth ? <NotionOAuthDialog workspace={oauth.workspace} onClose={() => setOAuth(null)} onConnected={refresh} /> : null}
   </>;

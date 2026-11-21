@@ -58,7 +58,7 @@ it('one OAuth app connects two Workspaces with separate atomic vault credentials
     await vi.waitFor(() => expect(f.service.oauth.status().phase).toBe('complete'));
   }
   expect(f.store.list()).toHaveLength(2);
-  expect(f.service.chatOverview().data!.workspaces).toHaveLength(2);
+  expect(f.service.snapshot().workspaces).toHaveLength(2);
   for (const item of [a, b]) {
     const saved = decodeCredential(f.secrets.get(item.value.identity.workspace_id)!);
     expect(saved.oauth?.refresh_token).toBe(item.value.refresh_token);
@@ -74,7 +74,7 @@ it('connects explicit production targets read-only and creates groups without wa
   const f=await fixture(),a=f.grant('Target Alpha'),b=f.grant('Target Beta');
   for(const item of[a,b]){const url=await f.start({environment:'production',expected_workspace_name:item.value.identity.workspace_name});await f.callback(url.searchParams.get('state'),item.code);await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));}
   expect(f.store.list().every(w=>w.environment==='production')).toBe(true);expect(f.service.snapshot().workspaces.every(w=>w.write_enabled===false)).toBe(true);
-  expect(f.service.chatOverview().data!.workspaces).toHaveLength(2);expect(f.service.messages.wakes.rows()).toHaveLength(0);
+  expect(f.service.snapshot().workspaces).toHaveLength(2);
 });
 it('rejects missing/mismatched production names and environment changes before content or credential writes',async()=>{
   const f=await fixture(),a=f.grant('Target Alpha');
@@ -139,7 +139,7 @@ it('switches an existing Internal Connection to OAuth only after validating that
   await vi.waitFor(()=>expect(f.service.oauth.status().phase).toBe('complete'));
   expect(f.store.list()).toHaveLength(1);expect(f.store.list()[0]).toMatchObject({id,label:'Existing test connection',auth_kind:'oauth'});
   expect(decodeCredential(f.secrets.get(id)!).oauth?.identity.workspace_id).toBe(id);
-  expect(f.service.chatOverview().data!.workspaces).toHaveLength(1);
+  expect(f.service.snapshot().workspaces).toHaveLength(1);
 });
 it('retains OAuth kind on authentication failure and recovers its actual kind from the vault on verification',async()=>{
   const f=await fixture(),a=f.grant(),id=a.value.identity.workspace_id,url=await f.start();

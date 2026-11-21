@@ -105,7 +105,7 @@ describe('workspace isolation and truthful state', () => {
     expect(snapshot.diagnostics.find(d => d.key === 'vault')?.status).toBe('error');
     expect(snapshot.diagnostics.find(d => d.key === 'notion')?.status).toBe('pending');
     expect(snapshot.clients.every(c => c.status === 'Not tested')).toBe(true);
-    expect(snapshot.capabilities).toEqual({ connect_in_gui: true, browse_pages: true, routing: true, client_config: true, group_chat: true, auto_wake: true, migration: false, content_write: true });
+    expect(snapshot.capabilities).toEqual({ connect_in_gui: true, browse_pages: true, routing: true, client_config: true, migration: false, content_write: true });
     expect(snapshot.settings.read_only).toBe(true);
   });
   it('returns the required read-only result envelope', async () => {

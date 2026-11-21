@@ -4,9 +4,8 @@ import { EmptyState } from '../components/Primitives.js';
 import { ProjectRouteDialog } from '../components/ProjectRouteDialog.js';
 import { resolveProject, saveProject,listMessageBoards,setupMessageBoard,setBoardPosting } from '../ipc/backend.js';
 import type {MessageBoard} from '../../../../packages/contracts/src/boards.js';
-import type { ChatSelection } from './Chats.js';
 
-export function ProjectRouting({ data, refresh, openChat }: { data: Snapshot; refresh: () => Promise<void>; openChat: (selection: ChatSelection) => void }) {
+export function ProjectRouting({ data, refresh }: { data: Snapshot; refresh: () => Promise<void> }) {
   const [filter, setFilter] = useState('');
   const [dialog, setDialog] = useState<{ route?: ProjectRoute } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,7 +58,7 @@ export function ProjectRouting({ data, refresh, openChat }: { data: Snapshot; re
           <dt>Root page</dt><dd>{route.root_page.title}<small className="mono">{route.root_page.id}</small></dd>
           <dt>Saved validation</dt><dd>{new Date(route.validated_at).toLocaleString()}</dd></dl>
         {sameName.length ? <p className="notice">Name also used by {sameName.map(other => other.project_key).join(', ')}. Name-based resolution is ambiguous; use a key.</p> : null}
-        <div className="workspace-actions"><button disabled={busy} onClick={() => open(route)}>Edit mapping</button><button disabled={busy} onClick={() => void resolve(route.project_key)}>Check route</button><button disabled={busy} onClick={() => openChat({ project_key: route.project_key })}>Open project chat</button></div>
+        <div className="workspace-actions"><button disabled={busy} onClick={() => open(route)}>Edit mapping</button><button disabled={busy} onClick={() => void resolve(route.project_key)}>Check route</button></div>
         <div className="message-board-summary"><h3>Notion 留言板</h3>{board?<><p>{board.enabled?'MCP append enabled':'MCP posting paused'} · no automatic turns</p><p className="mono">{board.url??board.page_id}</p><div className="workspace-actions"><button disabled={busy} onClick={()=>{if(!navigator.clipboard){setFailure('Copy unavailable. Use the link above.');return;}void navigator.clipboard.writeText(board.url??`https://app.notion.com/p/${board.page_id.replaceAll('-','')}`).then(()=>setNotice('Message-board link copied.'),()=>setFailure('Copy unavailable. Use the link above.'));}}>Copy board link</button><button disabled={busy} onClick={()=>void boardAction(route,!board.enabled)}>{board.enabled?'Pause board posting':'Enable board posting'}</button></div></>:<><button disabled={busy} onClick={()=>void boardAction(route)}>Create / verify message board</button></>}</div>
       </section>;
     })}</div> : <EmptyState title={data.projects.length ? 'No matching mappings' : 'No project routes configured'}>Add an exact project key, workspace and inspected root page.</EmptyState>}

@@ -25,11 +25,11 @@ function fixture(){
   const result:MutationResult={id,url:`https://app.notion.com/p/${id.replaceAll('-','')}`,kind:op.kind,last_edited_time:pages.get(id).last_edited_time,readback_verified:false,details:{}};known(result);return{...result,readback_verified:true};
  });
  const content={resource,children:async(id:string)=>({results:blocks.get(id),has_more:false,next_cursor:null}),read:async(input:any)=>({page:await resource('page',input.resource_id),blocks:{results:structuredClone(blocks.get(input.resource_id)??[]),has_more:false,next_cursor:null},warnings:[]}),apply,verify:async(_op:any,r:any)=>({...r,readback_verified:true})};
- const vault={read:vi.fn(async()=>workspace),write:vi.fn(),remove:vi.fn(),probe:async()=>true},bridge={run:vi.fn()},service=new Service(store,vault,()=>({identity:async()=>({workspace_id:workspace,workspace_name:'Production project',bot_id:randomUUID()}),search:async()=>({results:[],has_more:false,next_cursor:null}),page:id=>resource('page',id),content}),{bridge});
- cleanup.push(async()=>{service.wake.shutdown();store.close();rmSync(dir,{recursive:true,force:true});});
+ const vault={read:vi.fn(async()=>workspace),write:vi.fn(),remove:vi.fn(),probe:async()=>true},service=new Service(store,vault,()=>({identity:async()=>({workspace_id:workspace,workspace_name:'Production project',bot_id:randomUUID()}),search:async()=>({results:[],has_more:false,next_cursor:null}),page:id=>resource('page',id),content}));
+ cleanup.push(async()=>{store.close();rmSync(dir,{recursive:true,force:true});});
  const setup=()=>service.boards.setup({project_key:'P',route_revision:1});
  const post=(actor:'claude'|'codex'='claude',extra:object={})=>service.boards.post({project_key:'P',text:'A message',idempotency_key:randomUUID(),...extra},actor,['P']);
- return{store,service,workspace,root,pages,blocks,apply,vault,bridge,setup,post,setUnknown:()=>{unknown=true;},hold:(p:Promise<void>|null)=>{hold=p;}};
+ return{store,service,workspace,root,pages,blocks,apply,vault,setup,post,setUnknown:()=>{unknown=true;},hold:(p:Promise<void>|null)=>{hold=p;}};
 }
 it('creates one ordinary board under the exact root without enabling global production writes',async()=>{
  const f=fixture(),a=await f.setup(),b=await f.setup();expect(a.ok).toBe(true);expect(b.data!.page_id).toBe(a.data!.page_id);expect(f.apply).toHaveBeenCalledTimes(1);expect(f.service.content.enabled(f.workspace)).toBe(false);expect(f.pages.get(a.data!.page_id).parent.page_id).toBe(f.root);expect(f.service.snapshot().workspaces[0].board_append_projects).toEqual(['P']);expect(f.service.snapshot().settings.read_only).toBe(false);
@@ -39,7 +39,7 @@ it('allows only plain-text board append and deduplicates identical retry keys',a
  const a=await f.post('claude',{text:'@Codex is plain board text',idempotency_key:key}),b=await f.post('claude',{text:'@Codex is plain board text',idempotency_key:key});expect(a.ok).toBe(true);expect(b.data?.id).toBe(a.data?.id);expect(f.apply).toHaveBeenCalledTimes(2);
  expect((await f.post('claude',{text:'Changed',idempotency_key:key})).code).toBe('IDEMPOTENCY_CONFLICT');
  expect(f.blocks.get(board.page_id)![1].heading_3.rich_text[0].text.content).toContain('Claude');
- expect(f.store.db.prepare('SELECT count(*) AS n FROM wake_requests').get()!.n).toBe(0);f.service.wake.tick();expect(f.bridge.run).not.toHaveBeenCalled();
+ 
  expect((await f.service.content.execute({target:{workspace_id:f.workspace},operation:{kind:'create_page',parent_page_id:f.root,title:'Not permitted',text:''},idempotency_key:randomUUID()},{actor:'claude',write_workspace_ids:[f.workspace]})).code).toBe('WRITE_DISABLED');
 });
 it('denies ungranted projects, paused posting, moved boards and changed routes',async()=>{
@@ -58,8 +58,8 @@ it('keeps both writers messages when busy appends are retried with the same key'
 it('does not repeat unknown posts or save message bodies in its retry metadata',async()=>{
  const f=fixture();await f.setup();f.setUnknown();const key=randomUUID(),text='Private message body';expect((await f.post('claude',{text,idempotency_key:key})).code).toBe('MUTATION_OUTCOME_UNKNOWN');expect((await f.post('claude',{text,idempotency_key:key})).code).toBe('MUTATION_OUTCOME_UNKNOWN');expect(f.apply).toHaveBeenCalledTimes(2);expect(JSON.stringify(f.store.db.prepare('SELECT * FROM board_posts').all())).not.toContain(text);
 });
-it('board-only MCP exposes exactly three tools, excludes wake/general writes and enforces its role/scope',async()=>{
- const f=fixture();await f.setup();const server=createMcpServer(f.service,{actor:'claude',workspace_ids:[]},[],undefined,[],false,['P'],true),client=new Client({name:'board-unit',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();await server.connect(b);await client.connect(a);cleanup.push(async()=>{await client.close();await server.close();});
+it('board-only MCP exposes exactly three tools, excludes general writes and enforces its role/scope',async()=>{
+ const f=fixture();await f.setup();const server=createMcpServer(f.service,'claude',[],undefined,[],['P'],true),client=new Client({name:'board-unit',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();await server.connect(b);await client.connect(a);cleanup.push(async()=>{await client.close();await server.close();});
  expect((await client.listTools()).tools.map(t=>t.name).sort()).toEqual(['list_message_boards','post_message_board','read_message_board']);
  const call=async(name:string,args:Record<string,unknown>)=>JSON.parse(((await client.callTool({name,arguments:args})).content as {text:string}[])[0].text);
  expect((await call('post_message_board',{project_key:'P',text:'MCP append',idempotency_key:randomUUID()})).ok).toBe(true);expect((await call('read_message_board',{project_key:'OTHER'})).code).toBe('CONTENT_ACCESS_DENIED');

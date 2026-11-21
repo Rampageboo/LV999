@@ -1,8 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ConnectWorkspaceRequest, ReauthorizeWorkspaceRequest, Result, Snapshot, WorkspaceView,
   BrowsePagesRequest, AccessiblePage, PageBatch, ProjectRoute, SaveProjectRequest, ResolveProjectRequest } from '../../../../packages/contracts/src/index.js';
-import type { ClientKind, ClientView, GeneratedConfig, ChatOverview, ChatScope, ChatMessage, SendMessageRequest } from '../../../../packages/contracts/src/index.js';
-import type { AgentBinding, WakeView } from '../../../../packages/contracts/src/index.js';
+import type { ClientKind, ClientView, GeneratedConfig } from '../../../../packages/contracts/src/index.js';
 import type { OAuthStatus } from '../../../../packages/contracts/src/index.js';
 import type { ContentRead,Mutation,MutationPlan,MutationResult } from '../../../../packages/contracts/src/content.js';
 import type {MessageBoard} from '../../../../packages/contracts/src/boards.js';
@@ -34,16 +33,9 @@ export const inspectPage = (workspaceId: string, reference: string) => invoke<Re
 });
 export const saveProject = (input: SaveProjectRequest) => invoke<Result<ProjectRoute>>('page_route_request', { method: 'save_project', input });
 export const resolveProject = (input: ResolveProjectRequest) => invoke<Result<ProjectRoute>>('page_route_request', { method: 'resolve_project', input });
-export const detectClients = () => invoke<Result<ClientView[]>>('client_chat_request', { method: 'detect_clients', input: {} });
-export const generateClientConfig = (client: ClientKind, chatWorkspaceIds: string[],writeWorkspaceIds:string[]=[],readWorkspaceIds:string[]=[],boardProjects:string[]=[],boardsOnly=false) => invoke<Result<GeneratedConfig>>('client_chat_request', { method: 'generate_client_config', input: { client, chat_workspace_ids: chatWorkspaceIds,write_workspace_ids:writeWorkspaceIds,read_workspace_ids:readWorkspaceIds,board_project_keys:boardProjects,boards_only:boardsOnly } });
+export const detectClients = () => invoke<Result<ClientView[]>>('client_request', { method: 'detect_clients', input: {} });
+export const generateClientConfig = (client: ClientKind, writeWorkspaceIds:string[]=[],readWorkspaceIds:string[]=[],boardProjects:string[]=[],boardsOnly=false) => invoke<Result<GeneratedConfig>>('client_request', { method: 'generate_client_config', input: { client,write_workspace_ids:writeWorkspaceIds,read_workspace_ids:readWorkspaceIds,board_project_keys:boardProjects,boards_only:boardsOnly } });
 export type ClientConfigPreview={plan_id:string;config_path:string;replaces_existing_entry:boolean;backup_required:boolean};
-export const previewClientConfig=(config:GeneratedConfig)=>invoke<Result<ClientConfigPreview>>('client_chat_request',{method:'preview_client_config',input:{client:config.client,chat_workspace_ids:config.chat_workspace_ids,write_workspace_ids:config.write_workspace_ids,read_workspace_ids:config.read_workspace_ids,board_project_keys:config.board_project_keys,boards_only:config.boards_only}});
-export const applyClientConfig=(planId:string)=>invoke<Result<{config_path:string;backup_path:string|null;reload_required:boolean}>>('client_chat_request',{method:'apply_client_config',input:{plan_id:planId}});
-export const testClient = (client: ClientKind, kind: 'native' | 'sdk', chatWorkspaceIds: string[],writeWorkspaceIds:string[]=[],readWorkspaceIds:string[]=[],boardProjects:string[]=[],boardsOnly=false) => invoke<Result<ClientView>>('client_chat_request', { method: 'test_client', input: { client, kind, chat_workspace_ids: chatWorkspaceIds,write_workspace_ids:writeWorkspaceIds,read_workspace_ids:readWorkspaceIds,board_project_keys:boardProjects,boards_only:boardsOnly } });
-export const getChatOverview = () => invoke<Result<ChatOverview>>('client_chat_request', { method: 'chat_overview', input: {} });
-export const readChat = (input: ChatScope) => invoke<Result<{ messages: ChatMessage[]; has_more: boolean }>>('client_chat_request', { method: 'read_chat', input });
-export const sendChat = (input: SendMessageRequest) => invoke<Result<ChatMessage>>('client_chat_request', { method: 'send_chat', input });
-export const configureAgent = (input: {workspace_id:string;project_key?:string;actor:'claude'|'codex';model:string;effort:'low'|'medium'|'high';enabled:boolean;notion_tools?:boolean;expected_revision:number}) => invoke<Result<AgentBinding>>('client_chat_request',{method:'configure_agent',input});
-export const stopAgent = (bindingId:string) => invoke<Result<AgentBinding>>('client_chat_request',{method:'stop_agent',input:{binding_id:bindingId}});
-export const resumeAgent = (bindingId:string,revision:number) => invoke<Result<AgentBinding>>('client_chat_request',{method:'resume_agent',input:{binding_id:bindingId,expected_revision:revision}});
-export const retryWake = (wakeId:string,revision:number) => invoke<Result<WakeView>>('client_chat_request',{method:'retry_wake',input:{wake_id:wakeId,expected_revision:revision}});
+export const previewClientConfig=(config:GeneratedConfig)=>invoke<Result<ClientConfigPreview>>('client_request',{method:'preview_client_config',input:{client:config.client,write_workspace_ids:config.write_workspace_ids,read_workspace_ids:config.read_workspace_ids,board_project_keys:config.board_project_keys,boards_only:config.boards_only}});
+export const applyClientConfig=(planId:string)=>invoke<Result<{config_path:string;backup_path:string|null;reload_required:boolean}>>('client_request',{method:'apply_client_config',input:{plan_id:planId}});
+export const testClient = (client: ClientKind, kind: 'native' | 'sdk', writeWorkspaceIds:string[]=[],readWorkspaceIds:string[]=[],boardProjects:string[]=[],boardsOnly=false) => invoke<Result<ClientView>>('client_request', { method: 'test_client', input: { client, kind,write_workspace_ids:writeWorkspaceIds,read_workspace_ids:readWorkspaceIds,board_project_keys:boardProjects,boards_only:boardsOnly } });
