@@ -37,8 +37,10 @@ jobs:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: LV999 ${{ github.ref_name }}
-          releaseBody: "Engineering preview with read-only Notion access. Real workspace acceptance and remaining milestone work are still required."
+          releaseBody: "LV999 preview: multi-Workspace Notion access through one MCP backend, project routing and message boards, and verified migration captures. Migration execution and clean-install acceptance are still in progress. Unsigned installer; Windows SmartScreen may warn."
+          # Draft so the Owner reviews assets before publishing. Not a prerelease:
+          # the in-app updater reads releases/latest, which skips prereleases.
           releaseDraft: true
-          prerelease: true
+          prerelease: false
           args: --bundles nsis --config src-tauri/tauri.release.conf.json
           uploadUpdaterJson: true
