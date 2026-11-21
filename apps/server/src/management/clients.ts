@@ -15,7 +15,7 @@ import { ClientConfigInput, ClientTestInput, result, type ClientKind, type Clien
 const SERVER_NAME = 'lv999';
 export const claudeHealthPassed = (code: number | null, output: string) => code === 0 && /\bconnected\b/i.test(output) && !/\b(?:failed|not\s+connected|pending\s+approval)\b/i.test(output);
 type Entry = { type?: string; url?: string; command?: string; args?: string[]; enabled?: boolean; env?: Record<string, string> };
-export type ClientPaths = { home: string; codexHome: string; claudeConfig: string; executable: string; entry: string; data: string; path: string; transportEnv?: Record<string, string> };
+export type ClientPaths = { home: string; codexHome: string; claudeConfig: string; executable: string; entry: string; data: string; path: string; transportEnv?: Record<string, string>;mcp_executable?:string;mcp_entry?:string };
 function childEnvironment(values: Record<string, string>) {
   const env = { ...process.env };
   for (const [key, value] of Object.entries(values)) env[Object.keys(env).find(existing => existing.toLowerCase() === key.toLowerCase()) ?? key] = value;
@@ -37,7 +37,7 @@ export class ClientManager {
   }
   snapshot() { return this.states.map(state => ({ ...state })); }
   private entry(client: ClientKind, writes:string[]=[],reads:string[]=[],boards:string[]=[],boardsOnly=false): Entry {
-    return { type: 'stdio', command: this.paths.executable, args: [this.paths.entry, 'mcp', '--data-dir', this.paths.data,
+    return { type: 'stdio', command: this.paths.mcp_executable??this.paths.executable, args: [this.paths.mcp_entry??this.paths.entry, 'mcp', '--data-dir', this.paths.data,
       '--client', client,'--read-scoped',...(boardsOnly?['--boards-only']:[]),...boards.flatMap(key=>['--board-project',key]),...(boardsOnly?[]:reads.flatMap(id=>['--read-workspace',id])),...(boardsOnly?[]:writes.flatMap(id=>['--write-workspace',id]))] };
   }
   generate(input: unknown): Result<GeneratedConfig> {
@@ -143,7 +143,7 @@ export class ClientManager {
           const expected = this.entry(state.id, []);
           const args = entry.args;
           const matches = entry.enabled !== false && !entry.url && (!entry.type || entry.type === 'stdio') && typeof entry.command === 'string' && resolve(entry.command).toLowerCase() === resolve(expected.command!).toLowerCase() &&
-            Array.isArray(args) && args[1] === 'mcp' && resolve(args[0] ?? '').toLowerCase() === resolve(this.paths.entry).toLowerCase() &&
+            Array.isArray(args) && args[1] === 'mcp' && resolve(args[0] ?? '').toLowerCase() === resolve(this.paths.mcp_entry??this.paths.entry).toLowerCase() &&
             args.includes('--data-dir') && resolve(args[args.indexOf('--data-dir') + 1] ?? '').toLowerCase() === resolve(this.paths.data).toLowerCase() &&
             args.includes('--client') && args[args.indexOf('--client') + 1] === state.id && !entry.env;
           state.config_state = matches ? 'Matching' : 'Different';

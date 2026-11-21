@@ -52,6 +52,20 @@ jobs:
             "$( (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $lvRelative"
           }
           $lvHashes | Set-Content -LiteralPath "$lvStage/SHA256SUMS.txt" -Encoding utf8NoBOM
+      - name: Build update acceptance bootstrap
+        if: github.head_ref == 'codex/updates-autostart'
+        shell: pwsh
+        run: |
+          node scripts/tauri.mjs build --bundles nsis --config src-tauri/tauri.bootstrap.conf.json
+          if ($LASTEXITCODE -ne 0) { throw 'Update bootstrap build failed' }
+          $lvStage = Join-Path $env:RUNNER_TEMP 'lv999-ci'
+          New-Item -ItemType Directory -Force -Path "$lvStage/bootstrap" | Out-Null
+          Copy-Item -LiteralPath 'apps/desktop/src-tauri/target/release/bundle/nsis/LV999_0.1.9_x64-setup.exe' -Destination "$lvStage/bootstrap"
+          $lvHashes = Get-ChildItem -LiteralPath $lvStage -Recurse -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' } | ForEach-Object {
+            $lvRelative = [IO.Path]::GetRelativePath($lvStage, $_.FullName).Replace('\', '/')
+            "$( (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() )  $lvRelative"
+          }
+          $lvHashes | Set-Content -LiteralPath "$lvStage/SHA256SUMS.txt" -Encoding utf8NoBOM
       - name: Upload Windows preview
         uses: actions/upload-artifact@v4
         with:

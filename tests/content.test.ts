@@ -40,6 +40,10 @@ it('keeps writes disabled by default and enforces startup client scopes before r
   const f=fixture();expect((await f.content.execute(f.create())).code).toBe('WRITE_DISABLED');await f.enable();f.access.mockClear();
   expect((await f.content.execute(f.create(),{actor:'claude',write_workspace_ids:[]})).code).toBe('WRITE_ACCESS_DENIED');expect(f.access).not.toHaveBeenCalled();expect(f.apply).not.toHaveBeenCalled();
 });
+it('blocks updates for pending writes and blocks new dispatch during an update lease',async()=>{
+ const f=fixture();await f.enable();const lease=randomUUID();expect(f.store.beginAppUpdate(lease,process.pid)).toBe(true);expect((await f.content.execute(f.create())).code).toBe('MUTATION_BUSY');expect(f.apply).not.toHaveBeenCalled();expect(f.store.beginAppUpdate(randomUUID(),process.pid)).toBe(false);f.store.endAppUpdate(randomUUID());expect(f.store.updateBlocked()).toBe(true);f.store.endAppUpdate(lease);expect(f.store.updateBlocked()).toBe(false);
+ f.setUnknown();expect((await f.content.execute(f.create())).code).toBe('MUTATION_OUTCOME_UNKNOWN');expect(f.store.beginAppUpdate(randomUUID(),process.pid)).toBe(false);
+});
 it('production targets remain read-only until the exact ID is confirmed and can be disabled offline',async()=>{
   const f=fixture();f.store.add({id:f.a,label:'Production target',environment:'production'});
   expect((await f.content.execute(f.create())).code).toBe('WRITE_DISABLED');f.access.mockClear();

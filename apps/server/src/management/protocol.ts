@@ -5,7 +5,7 @@ import type { Service } from '../core/service.js';
 
 const Request = z.object({
   id: z.number().int(),
-  method: z.enum(['snapshot', 'verify_workspace', 'connect_workspace', 'reauthorize_workspace', 'browse_pages', 'inspect_page', 'save_project', 'resolve_project',
+  method: z.enum(['snapshot','begin_app_update','end_app_update', 'verify_workspace', 'connect_workspace', 'reauthorize_workspace', 'browse_pages', 'inspect_page', 'save_project', 'resolve_project',
     'detect_clients', 'generate_client_config','preview_client_config','apply_client_config', 'test_client',
     'oauth_status', 'configure_oauth', 'start_oauth', 'cancel_oauth', 'refresh_oauth',
     'content_read','set_workspace_writes','prepare_mutation','approve_mutation','execute_mutation','mutation_status','pending_mutations','list_message_boards','setup_message_board','set_board_posting']),
@@ -22,6 +22,8 @@ export async function runManagement(service: Service) {
       id = request.id;
       let value;
       switch (request.method) {
+        case 'begin_app_update':{const input=z.object({owner:z.uuid(),desktop_pid:z.number().int().positive()}).strict().parse(request.params);value=result({ready:service.store.beginAppUpdate(input.owner,input.desktop_pid)});break;}
+        case 'end_app_update':{const input=z.object({owner:z.uuid()}).strict().parse(request.params);service.store.endAppUpdate(input.owner);value=result({released:true});break;}
         case 'snapshot': value = service.snapshot(); break;
         case 'verify_workspace': value = await service.verify(WorkspaceRef.parse(request.params).workspace_id); break;
         case 'connect_workspace': value = await service.connectWorkspace(request.params); break;

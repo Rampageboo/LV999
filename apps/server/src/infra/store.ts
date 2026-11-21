@@ -17,6 +17,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS oauth_settings (singleton INTEGER PRIMARY KEY CHECK(singleton=1), client_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS notion_request_slots (connection_hash TEXT PRIMARY KEY,next_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS protected_workspaces (id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS app_update_lease(singleton INTEGER PRIMARY KEY CHECK(singleton=1),owner TEXT NOT NULL,owner_pid INTEGER NOT NULL,expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS project_routes (
         project_key TEXT PRIMARY KEY, name_lookup TEXT NOT NULL, workspace_id TEXT NOT NULL REFERENCES workspaces(id),
         revision INTEGER NOT NULL, route TEXT NOT NULL);
@@ -30,6 +31,15 @@ export class Store {
     this.db.prepare('INSERT INTO workspaces (id,config) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET config=excluded.config,verification=NULL')
       .run(config.id, JSON.stringify(config));
   }
+  updateBlocked(){return Boolean(this.db.prepare('SELECT owner FROM app_update_lease WHERE singleton=1 AND expires>?').get(Date.now()));}
+  beginAppUpdate(owner:string,pid:number){
+    this.db.exec('BEGIN IMMEDIATE');try{
+      if(this.updateBlocked()||this.db.prepare("SELECT retry_key FROM content_operations WHERE state IN ('DISPATCHING','UNKNOWN','UNVERIFIED') LIMIT 1").get()||this.db.prepare('SELECT owner FROM content_write_locks WHERE expires>? LIMIT 1').get(Date.now())){this.db.exec('ROLLBACK');return false;}
+      this.db.prepare('INSERT OR REPLACE INTO app_update_lease(singleton,owner,owner_pid,expires) VALUES(1,?,?,?)').run(owner,pid,Date.now()+15*60*1000);this.db.exec('COMMIT');return true;
+    }catch(error){this.db.exec('ROLLBACK');throw error;}
+  }
+  endAppUpdate(owner:string){this.db.prepare('DELETE FROM app_update_lease WHERE singleton=1 AND owner=?').run(owner);}
+  recoverAppUpdate(){const row=this.db.prepare('SELECT owner,owner_pid,expires FROM app_update_lease WHERE singleton=1').get();if(!row)return;let alive=true;try{process.kill(Number(row.owner_pid),0);}catch(error){alive=(error as NodeJS.ErrnoException).code!=='ESRCH';}if(!alive||Number(row.expires)<Date.now())this.endAppUpdate(String(row.owner));}
   isProtected(id:string){return Boolean(this.db.prepare('SELECT id FROM protected_workspaces WHERE id=?').get(id.toLowerCase()));}
   protect(id:string){this.db.prepare('INSERT OR IGNORE INTO protected_workspaces(id) VALUES(?)').run(id.toLowerCase());}
   async requestSlot(connectionHash:string,signal?:AbortSignal){

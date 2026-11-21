@@ -3,6 +3,7 @@
 use std::{io::{BufRead, BufReader, Write}, path::PathBuf, process::{Child, ChildStdin, Command, Stdio},
     sync::{mpsc, Arc, Mutex}, time::Duration};
 use tauri::Manager;
+mod desktop;
 
 struct Backend {
     child: Child,
@@ -14,6 +15,7 @@ impl Backend {
     fn spawn(runtime: PathBuf, data: PathBuf) -> Result<Self, String> {
         let mut command = Command::new(runtime.join("lv999-node.exe"));
         command.arg(runtime.join("backend.mjs")).args(["management", "--data-dir"]).arg(data)
+            .env("LV999_DESKTOP_PID",std::process::id().to_string())
             .env_remove("NODE_OPTIONS").env_remove("NODE_PATH")
             .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         #[cfg(windows)] {
@@ -152,9 +154,15 @@ async fn content_request(method: String, input: serde_json::Value, state: tauri:
 }
 
 fn main() {
+    let context=tauri::generate_context!();
+    let startup_name=context.config().identifier.clone();
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app,_args,_cwd|{if let Some(window)=app.get_webview_window("main"){let _=window.unminimize();let _=window.show();let _=window.set_focus();}}))
+        .plugin(tauri_plugin_autostart::Builder::new().app_name(startup_name).build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            let automatic=std::fs::read(app.path().app_local_data_dir()?.join("desktop-settings.json")).ok().and_then(|bytes|serde_json::from_slice::<serde_json::Value>(&bytes).ok()).and_then(|v|v["automatic_checks"].as_bool()).unwrap_or(true);
+            app.manage(desktop::DesktopState::new(automatic));
             let runtime = if cfg!(debug_assertions) {
                 PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("runtime")
             } else { app.path().resource_dir()?.join("runtime") };
@@ -162,15 +170,14 @@ fn main() {
             app.manage(Arc::new(Mutex::new(backend)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace, page_route_request, client_request, oauth_request, open_notion_authorization, content_request])
-        .build(tauri::generate_context!())
+        .invoke_handler(tauri::generate_handler![backend_snapshot, verify_workspace, connect_workspace, reauthorize_workspace, page_route_request, client_request, oauth_request, open_notion_authorization, content_request,desktop::desktop_settings,desktop::set_autostart,desktop::set_update_checks,desktop::check_app_update,desktop::install_app_update])
+        .build(context)
         .expect("LV999 desktop could not start")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 // Wry can exit the process without running Rust destructors. Reap the owned child explicitly.
                 let state = app.state::<SharedBackend>();
                 if let Ok(mut backend) = state.lock() {
-                    let _ = backend.request("shutdown_agents", serde_json::Value::Null);
                     let _ = backend.child.kill();
                     let _ = backend.child.wait();
                 };

@@ -23,6 +23,7 @@ it('packages the runtime and uses only the new signed updater channel', () => {
   expect(config.bundle.resources).toEqual({ 'runtime/': 'runtime/' });
   expect(config.plugins.updater.endpoints).toEqual(['https://github.com/Rampageboo/LV999/releases/latest/download/latest.json']);
   expect(Buffer.from(config.plugins.updater.pubkey, 'base64').toString()).toContain('minisign public key');
+  expect(config.plugins.updater.requireSignedVersion).toBe(true);
   const root = JSON.parse(readFileSync('package.json', 'utf8'));
   expect(root.version).toBe(config.version);
   expect(root.dependencies['@modelcontextprotocol/server']).toMatch(/^2\./);

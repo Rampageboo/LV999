@@ -69,3 +69,4 @@ html,body,#root{height:100%;overflow:hidden}
 .desktop-frame main{overflow-y:auto;max-width:none;margin:0;padding-inline:max(32px,calc((100% - 1600px)/2 + 32px))}
 @media(max-width:650px){.desktop-frame>.app-shell{grid-template-rows:auto minmax(0,1fr)}.desktop-frame main{padding-inline:18px}}
 *{scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.desktop-settings{margin-top:28px}.desktop-setting{display:flex;align-items:center;gap:12px;margin:18px 0}.desktop-setting input{width:18px;height:18px;accent-color:var(--accent)}.desktop-settings .workspace-actions{margin-top:22px}.release-notes{white-space:pre-wrap}

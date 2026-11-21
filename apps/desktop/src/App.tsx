@@ -9,6 +9,7 @@ import { ProjectRouting } from './screens/ProjectRouting.js';
 import { NavIcon } from './components/NavIcon.js';
 import { Content } from './screens/Content.js';
 import {TitleBar} from './components/TitleBar.js';
+import {useDesktopFeatures,UpdateNotice} from './components/DesktopSettings.js';
 
 const pages = [
   ['Dashboard', '⌂', 'Your Notion connections, in one place.'],
@@ -21,6 +22,7 @@ const pages = [
   ['Settings', '⚙', 'Your local service and security settings.'],
 ];
 export function App() {
+  const desktop=useDesktopFeatures();
   const [page, setPage] = useState('Dashboard');
   const [data, setData] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,8 +48,8 @@ export function App() {
       case 'Clients': content = <AIClients data={data} />; break;
       case 'Migration': content = <MigrationManager data={data} />; break;
       case 'Logs': content = <ActivityLogs data={data} />; break;
-      case 'Settings': content = <Settings data={data} />; break;
+      case 'Settings': content = <Settings data={data} desktop={desktop}/>; break;
     }
   }
-  return <div className="desktop-frame"><TitleBar page={page}/><div className="app-shell"><aside><div className="brand">LV999</div><nav aria-label="Main navigation">{pages.map(([name]) => <button key={name} aria-current={page === name ? 'page' : undefined} className={page === name ? 'selected' : ''} onClick={() => setPage(name)}><NavIcon name={name} />{name}</button>)}</nav></aside><main id="main-content"><header><h1>{page}</h1><button className="primary" disabled={loading} onClick={() => void refresh()}><span aria-hidden="true">↻</span> {loading ? 'Checking…' : 'Refresh'}</button></header>{error ? <div role="alert" className="backend-error"><h2>Backend unavailable</h2><p>{error}</p></div> : null}{!data && !error ? <p role="status">Loading…</p> : content}{data ? <div className="snapshot-time">{new Date(data.captured_at).toLocaleTimeString()}</div> : null}</main></div></div>;
+  return <div className="desktop-frame"><TitleBar page={page}/><div className="app-shell"><aside><div className="brand">LV999</div><nav aria-label="Main navigation">{pages.map(([name]) => <button key={name} aria-current={page === name ? 'page' : undefined} className={page === name ? 'selected' : ''} onClick={() => setPage(name)}><NavIcon name={name} />{name}</button>)}</nav></aside><main id="main-content"><header><h1>{page}</h1><button className="primary" disabled={loading} onClick={() => void refresh()}><span aria-hidden="true">↻</span> {loading ? 'Checking…' : 'Refresh'}</button></header>{page!=='Settings'?<UpdateNotice desktop={desktop} onOpen={()=>setPage('Settings')}/>:null}{error ? <div role="alert" className="backend-error"><h2>Backend unavailable</h2><p>{error}</p></div> : null}{!data && !error ? <p role="status">Loading…</p> : content}{data ? <div className="snapshot-time">{new Date(data.captured_at).toLocaleTimeString()}</div> : null}</main></div></div>;
 }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const APP_ID = 'com.rampageboo.lv999';
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.2.0';
 export const NOTION_VERSION = '2026-03-11';
 export const WorkspaceEnvironment=z.enum(['test','production']);
 export type WorkspaceEnvironmentId=z.infer<typeof WorkspaceEnvironment>;

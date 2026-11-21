@@ -42,6 +42,7 @@ export class ContentService {
     return{workspaceId:route.workspace_id,projectKey:route.project_key,routeRevision:route.revision,rootId:route.root_page.id};
   }
   private permission(target:Target,caller:ContentCaller,operation:MutationOp){
+    if(this.store.updateBlocked())throw new DomainError('MUTATION_BUSY','An application update is in progress. Retry after LV999 restarts.');
     if(this.store.list().find(w=>w.id===target.workspaceId)?.access_role==='source')throw new DomainError('WRITE_ACCESS_DENIED','Source connections are strictly read-only.');
     if(caller.project_keys&&(!target.projectKey||!caller.project_keys.includes(target.projectKey)))throw new DomainError('WRITE_ACCESS_DENIED','This session can write only through its bound project route.');
     if(caller.write_workspace_ids!=='owner'&&!caller.write_workspace_ids.includes(target.workspaceId))throw new DomainError('WRITE_ACCESS_DENIED','This client was not granted write access to that Workspace. Regenerate its scoped configuration.');
@@ -163,6 +164,7 @@ export class ContentService {
   private claim(request:Mutation,prepared:Prepared,caller:ContentCaller,approval?:z.infer<typeof ExecuteMutationInput>['approval']){
     const db=this.store.db,key=request.idempotency_key,ownerId=randomUUID();db.exec('BEGIN IMMEDIATE');
     try{
+      if(this.store.updateBlocked())throw new DomainError('MUTATION_BUSY','An application update is in progress.');
       const existing=db.prepare('SELECT * FROM content_operations WHERE actor=? AND retry_key=?').get(caller.actor,key);
       if(existing){if(existing.hash!==hash({request,actor:caller.actor}))throw new DomainError('IDEMPOTENCY_CONFLICT','This retry key was used for different content.');if(!(existing.state==='FAILED_REVIEWED'&&existing.kind==='append_blocks'&&existing.error_code==='INVALID_INPUT'&&!existing.result&&caller.actor==='human'&&caller.write_workspace_ids==='owner')){db.exec('ROLLBACK');return{existing,ownerId:null};}}
       const pending=db.prepare("SELECT state FROM content_operations WHERE workspace_id=? AND state IN ('DISPATCHING','UNKNOWN')").get(prepared.target.workspaceId);

@@ -6,16 +6,22 @@ import { Store } from '../infra/store.js';
 import { WindowsVault } from '../infra/vault.js';
 import { createMcpServer } from '../mcp/server.js';
 import { runManagement } from '../management/protocol.js';
+import {dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {prepareManagedMcp} from '../infra/managed-mcp.js';
+import {ClientManager} from '../management/clients.js';
 
 const args = process.argv.slice(2);
 const mode = args.shift() ?? 'mcp';
 const flag = (key: string) => { const i = args.indexOf(key); return i < 0 ? undefined : args[i + 1]; };
 const dataDir = flag('--data-dir') ?? join(process.env.LOCALAPPDATA ?? process.cwd(), 'com.rampageboo.lv999');
 const store = new Store(dataDir);
-const service = new Service(store, new WindowsVault());
+const managed=mode==='management'&&process.env.LV999_DESKTOP_PID?await prepareManagedMcp(dataDir,dirname(fileURLToPath(import.meta.url))):undefined;
+const service = new Service(store, new WindowsVault(),undefined,managed?{clients:new ClientManager(dataDir,managed)}:undefined);
 await service.initialize();
 
 if (mode === 'management') {
+  if(process.env.LV999_DESKTOP_PID)store.recoverAppUpdate();
   await runManagement(service);
   await service.oauth.close();
   store.close();
