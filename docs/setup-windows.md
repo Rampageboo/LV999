@@ -1,6 +1,6 @@
 # Windows bootstrap
 
-Milestone 1 now includes scoped Notion content writes, GUI content review, safe client configuration application. Both test Workspaces passed real CRUD and Claude/Codex creation/write/readback; See [content and native-client acceptance](qa/2026-11-19-m1-content.md) for build/GUI evidence and remaining boundaries. Do not use Vibecode or Honour. Local native compilation remains blocked by Smart App Control; Windows packages are built in GitHub CI. Closing the host stops its backend. Tray/background operation, autostart and full single-instance recovery remain Milestone 2.
+Milestone 1 now includes scoped Notion content writes, GUI content review, safe client configuration application. Both test Workspaces passed real CRUD and Claude/Codex creation/write/readback; See [content and native-client acceptance](qa/2026-11-19-m1-content.md) for build/GUI evidence and remaining boundaries. Do not use Vibecode or Honour. Local native compilation remains blocked by Smart App Control; Windows packages are built in GitHub CI. Closing the host stops its owned management backend. Startup registration and duplicate-window handling are now native Settings features; tray/background operation and crash recovery remain separate work.
 
 ## Build and run
 
@@ -113,7 +113,13 @@ npm run cli -- register --workspace-id $testWorkspaceId --label $testWorkspaceLa
 npm run cli -- verify --workspace-id $testWorkspaceId
 ```
 
-The CLI's default state directory matches Tauri. `--data-dir` supports isolated temporary test state. `npm run mcp` starts stdio MCP; installed clients can invoke `<install-dir>\runtime\lv999-node.exe` with `<install-dir>\runtime\backend.mjs`, `mcp`. This step does not edit Claude or Codex configuration or expose credential management as MCP tools.
+The CLI's default state directory matches Tauri. `--data-dir` supports isolated temporary test state. `npm run mcp` starts stdio MCP. Generate installed client configurations from the desktop's AI Clients page: its stable managed launcher selects complete, hash-verified runtime bundles under the app's data directory. Existing MCP sessions retain their immutable executable/backend while new sessions use the current bundle. This avoids disposable CI paths and installer file locks. Configuration generation does not apply the entry or expose credential management as MCP tools.
+
+## Startup and updates
+
+In Settings, **Start with Windows** reads and changes the current user's real startup registration. Enable it after installation; portable builds cannot register themselves. Launching LV999 again focuses the existing window. This opens the GUI at login; it does not provide tray/background operation after the window closes.
+
+**Automatically check for updates** defaults on and persists locally. LV999 checks on launch and every six hours. A newer version produces a notice; only **Update to … & restart** starts installation. Pending, unknown or unverified content writes prevent installation. During installation a shared maintenance lease blocks new writes. The app verifies the package signature and its signed version before launching the installer; a download/verification failure keeps the current version. A working published release channel is required for an actual update.
 
 ## Release signing
 
@@ -121,4 +127,4 @@ The CLI's default state directory matches Tauri. `--data-dir` supports isolated 
 
 A new LV999 key pair was generated locally in ignored `.tools/updater.key` and `.tools/updater.key.pub`. Do not regenerate it casually, commit it, copy Silverbench's key, or print it into a chat/log. Back up the private key securely before removing `.tools`. Before a release, configure Actions secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (this initial key has an empty password). No secrets were uploaded and no release was published during M0.
 
-Tags must match the app version. The workflow creates a draft prerelease for review. A draft prerelease does not establish a working `releases/latest` channel; publish an appropriate signed release only after its acceptance gate. Updater signatures are not Windows Authenticode signing and do not by themselves satisfy Smart App Control.
+Tags must match the app version. The workflow creates a draft normal release for review. Drafts and prereleases do not establish a working `releases/latest` channel; publish an appropriate signed normal release only after its acceptance gate. Updater signatures are not Windows Authenticode signing and do not by themselves satisfy Smart App Control.

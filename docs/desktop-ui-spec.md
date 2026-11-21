@@ -12,7 +12,7 @@ Tokens: accent `#4338b8`, text `#17171f`, secondary `#646575`, sidebar `#f3f4f8`
 | Clients | User-scope configuration/version detection, credential-free snippets and separate SDK/native isolated handshake evidence; no automatic global-file overwrite |
 | Migration | No jobs; discovery/execution disabled until M3/M4 |
 | Logs | Backend-generated safe events, no raw Notion responses or tokens |
-| Settings | Actual identity/data/runtime/API configuration; autostart and remote access off; later settings disabled |
+| Settings | Actual identity/data/runtime/API configuration; native Windows startup toggle, automatic update checks and explicit install/restart; remote access off |
 
 Refresh asks the native host for a fresh backend snapshot. On failure the shell clears the previous snapshot and shows Backend unavailable, so stale green status cannot survive a failed refresh. Workspace checks are timestamped, last-known identity evidence; the app does not poll Notion or claim continuing live connectivity. The frontend never calls Notion, accesses SQLite, or receives credentials.
 

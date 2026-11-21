@@ -37,7 +37,7 @@ jobs:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: LV999 ${{ github.ref_name }}
-          releaseBody: "LV999 preview: multi-Workspace Notion access through one MCP backend, project routing and message boards, and verified migration captures. Migration execution and clean-install acceptance are still in progress. Unsigned installer; Windows SmartScreen may warn."
+          releaseBody: "LV999 0.2: automatic update checks with explicit install and restart, Windows startup controls, and a stable MCP runtime for Claude Code and Codex. Signed updater packages are verified by the app before installation. The Windows installer has no Authenticode certificate; Windows SmartScreen may warn."
           # Draft so the Owner reviews assets before publishing. Not a prerelease:
           # the in-app updater reads releases/latest, which skips prereleases.
           releaseDraft: true
